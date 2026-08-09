@@ -82,10 +82,6 @@ button:disabled { cursor: wait; opacity: .55; }
 }
 .chart-title .mode { color: #d8a900; font-size: 10px; }
 #gexChart { width: 100%; height: 100%; }
-.watermark {
-  position: absolute; left: 86px; bottom: 46px; pointer-events: none;
-  color: rgba(255,255,255,.055); font-size: 24px; font-weight: 700;
-}
 .unit { position: absolute; left: 10px; bottom: 5px; color: #bbb; font-size: 10px; }
 
 .pattern-box {
