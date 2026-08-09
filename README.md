@@ -1,8 +1,8 @@
-# Foxchase GEX Community Client
+# Foxchase GEX
 
 This is the open-source, self-run client for the Foxchase SPX/NDX 0DTE gamma-exposure dashboard. Your Schwab app credentials and OAuth tokens stay on your computer. The client retrieves the option chain locally, removes every field the calculation does not need, and sends the minimized numeric snapshot to the private Foxchase calculation API.
 
-The GEX calculation and Foxchase Read classifier are intentionally not included in this repository. The community client is free to run yourself; a fully hosted version may be offered separately after the required brokerage/data approvals are in place.
+The GEX calculation and Foxchase Read classifier are intentionally not included in this repository. This client is free to run yourself; a fully hosted version may be offered separately after the required brokerage/data approvals are in place.
 
 ## Data boundary
 
@@ -19,8 +19,8 @@ It does **not** contain your Schwab client ID, client secret, access token, refr
 Python 3.10 or newer is recommended.
 
 ```bash
-git clone https://github.com/adamk/foxchase-gex-community.git
-cd foxchase-gex-community
+git clone https://github.com/adamk/foxchase-gex.git
+cd foxchase-gex
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -53,4 +53,3 @@ pytest
 ## Important
 
 This project is research software, not investment advice. It does not place trades. You are responsible for complying with the terms and market-data rights attached to your brokerage/developer account. Do not commit `.env` or token files; both are ignored by Git.
-

@@ -3,7 +3,7 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "foxchase-gex-community"
+name = "foxchase-gex"
 version = "0.1.0"
 description = "Open-source local client for the Foxchase GEX dashboard"
 requires-python = ">=3.10"

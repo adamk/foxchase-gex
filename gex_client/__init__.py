@@ -1,2 +1,1 @@
-"""Foxchase GEX community client."""
-
+"""Foxchase GEX local client."""
