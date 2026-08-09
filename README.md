@@ -1,8 +1,8 @@
-# Foxchase GEX
+# Foxchase Trading GEX
 
-This is the open-source, self-run client for the Foxchase SPX/NDX 0DTE gamma-exposure dashboard. Your Schwab app credentials and OAuth tokens stay on your computer. The client retrieves the option chain locally, removes every field the calculation does not need, and sends the minimized numeric snapshot to the private Foxchase calculation API.
+This is the open-source, self-run client for the Foxchase Trading SPX/NDX 0DTE gamma-exposure dashboard. Your Schwab app credentials and OAuth tokens stay on your computer. The client retrieves the option chain locally, removes every field the calculation does not need, and sends the minimized numeric snapshot to the private Foxchase Trading calculation API.
 
-The GEX calculation and Foxchase Read classifier are intentionally not included in this repository. This client is free to run yourself; a fully hosted version may be offered separately after the required brokerage/data approvals are in place.
+The GEX calculation and Foxchase Trading Read classifier are intentionally not included in this repository. This client is free to run yourself; a fully hosted version may be offered separately after the required brokerage/data approvals are in place.
 
 ## Data boundary
 
@@ -23,14 +23,14 @@ You need a regular Schwab brokerage account and a separate account on the [Schwa
 3. Request access to **Trader API - Individual** and wait for approval.
 4. Open the developer dashboard and create an app.
 5. Select **Market Data Production**. This dashboard reads option-chain market data and does not place orders, so Accounts and Trading access is not required.
-6. Use an app name such as `Foxchase GEX Local`.
+6. Use an app name such as `Foxchase Trading GEX Local`.
 7. Set the callback URL to exactly `https://127.0.0.1` with no trailing slash.
 8. Submit the app and wait until its status is **Ready for use**. A pending or provisionally approved app will not authenticate.
 9. Open the approved app's details and copy its app key/client ID and app secret. Never post either value or commit them to Git.
 
 Schwab may change the portal labels. The callback URL in the portal and `.env` must match exactly, including capitalization, protocol, port, path, and trailing slash.
 
-## 2. Install Foxchase GEX
+## 2. Install Foxchase Trading GEX
 
 Python 3.10 or newer is recommended.
 

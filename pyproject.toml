@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "foxchase-gex"
 version = "0.1.0"
-description = "Open-source local client for the Foxchase GEX dashboard"
+description = "Open-source local client for the Foxchase Trading GEX dashboard"
 requires-python = ">=3.10"
 dependencies = [
   "Flask>=3.0,<4",
