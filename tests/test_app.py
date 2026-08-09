@@ -67,3 +67,21 @@ def test_presence_route_proxies_anonymous_session(monkeypatch):
 
     assert response.status_code == 200
     assert response.json == {"online": 7, "ttl_seconds": 90}
+
+
+def test_setup_status_never_returns_credentials(monkeypatch, tmp_path):
+    monkeypatch.setenv("SCHWAB_CLIENT_ID", "private-client-id")
+    monkeypatch.setenv("SCHWAB_CLIENT_SECRET", "private-client-secret")
+    monkeypatch.setattr(app_module, "token_path", lambda: tmp_path / "missing-token.json")
+    client = app_module.app.test_client()
+
+    response = client.get("/api/setup-status")
+
+    assert response.status_code == 200
+    assert response.json == {
+        "ready": False,
+        "client_id_configured": True,
+        "client_secret_configured": True,
+        "token_configured": False,
+    }
+    assert "private-client" not in response.get_data(as_text=True)

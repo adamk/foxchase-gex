@@ -30,6 +30,22 @@
 
     <div class="error" id="error" hidden></div>
 
+    <section class="setup-card" id="setup-card" hidden>
+      <div>
+        <div class="setup-kicker">One-time setup</div>
+        <h2>Connect your Schwab developer app</h2>
+        <p>Your app credentials and OAuth token stay on this computer. They are never sent to Foxchase.</p>
+      </div>
+      <ol>
+        <li>Create an Individual Developer app at <a href="https://developer.schwab.com/" target="_blank" rel="noopener">developer.schwab.com</a> with <strong>Market Data Production</strong>.</li>
+        <li>Set its callback URL to exactly <code>https://127.0.0.1</code> and wait for <strong>Ready for use</strong>.</li>
+        <li>Copy <code>.env.example</code> to <code>.env</code>, then add the app key and secret.</li>
+        <li>Run <code>python -m gex_client.login</code>, authorize Schwab, and paste the full redirect URL.</li>
+        <li>Run <code>python run.py</code> again.</li>
+      </ol>
+      <div class="setup-state" id="setup-state"></div>
+    </section>
+
     <section class="chart-card">
       <div class="chart-title">
         <span>gamma exposure</span>

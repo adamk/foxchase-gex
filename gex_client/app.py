@@ -7,7 +7,7 @@ import requests
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 
-from gex_client.schwab import SchwabError, fetch_sanitized_snapshot
+from gex_client.schwab import SchwabError, fetch_sanitized_snapshot, token_path
 
 
 load_dotenv()
@@ -66,6 +66,22 @@ def health():
     return jsonify({"ok": True, "service": "foxchase-gex-local-client"})
 
 
+@app.get("/api/setup-status")
+def setup_status():
+    """Report only whether local OAuth inputs exist; never return their values."""
+    has_client_id = bool(os.getenv("SCHWAB_CLIENT_ID", "").strip())
+    has_client_secret = bool(os.getenv("SCHWAB_CLIENT_SECRET", "").strip())
+    has_token = token_path().is_file()
+    return jsonify(
+        {
+            "ready": has_client_id and has_client_secret and has_token,
+            "client_id_configured": has_client_id,
+            "client_secret_configured": has_client_secret,
+            "token_configured": has_token,
+        }
+    )
+
+
 @app.get("/api/gex/<symbol>")
 def gex(symbol: str):
     try:
@@ -106,4 +122,3 @@ def presence():
         return jsonify({"error": str(exc)}), 400
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 502
-

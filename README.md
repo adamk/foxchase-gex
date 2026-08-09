@@ -14,7 +14,23 @@ The EC2 request contains only:
 
 It does **not** contain your Schwab client ID, client secret, access token, refresh token, account number, order history, positions, quotes, contract symbols, bid/ask data, or personal information. Submitted snapshots are calculated in memory and are not stored. Anonymous active-session presence stores only a one-way digest of a random browser-session ID for 90 seconds.
 
-## Install
+## 1. Create a Schwab developer app
+
+You need a regular Schwab brokerage account and a separate account on the [Schwab Developer Portal](https://developer.schwab.com/).
+
+1. Register or sign in at the Schwab Developer Portal.
+2. In your developer profile, request the **Individual Developer** role if you do not already have it.
+3. Request access to **Trader API - Individual** and wait for approval.
+4. Open the developer dashboard and create an app.
+5. Select **Market Data Production**. This dashboard reads option-chain market data and does not place orders, so Accounts and Trading access is not required.
+6. Use an app name such as `Foxchase GEX Local`.
+7. Set the callback URL to exactly `https://127.0.0.1` with no trailing slash.
+8. Submit the app and wait until its status is **Ready for use**. A pending or provisionally approved app will not authenticate.
+9. Open the approved app's details and copy its app key/client ID and app secret. Never post either value or commit them to Git.
+
+Schwab may change the portal labels. The callback URL in the portal and `.env` must match exactly, including capitalization, protocol, port, path, and trailing slash.
+
+## 2. Install Foxchase GEX
 
 Python 3.10 or newer is recommended.
 
@@ -27,13 +43,27 @@ pip install -r requirements.txt
 cp .env.example .env
 ```
 
-Add your own Schwab developer app values to `.env`, then authorize it:
+Edit `.env`:
+
+```dotenv
+SCHWAB_CLIENT_ID=your_app_key
+SCHWAB_CLIENT_SECRET=your_app_secret
+SCHWAB_REDIRECT_URI=https://127.0.0.1
+```
+
+## 3. Authorize Schwab
+
+Run:
 
 ```bash
 python -m gex_client.login
 ```
 
-The OAuth token is written with user-only permissions to `~/.foxchase-gex/schwab_tokens.json` by default.
+The command prints a Schwab authorization link. Open it, sign in with your normal Schwab brokerage credentials, approve access, and select the applicable account. Schwab then redirects the browser to `https://127.0.0.1/?code=...`. It is normal for that local HTTPS page not to load. Immediately copy the **entire URL from the browser address bar** and paste it into the terminal prompt. The pasted input is hidden.
+
+The OAuth token is then written with user-only permissions to `~/.foxchase-gex/schwab_tokens.json` by default. If authorization fails, verify that the callback URL matches exactly and that the app says **Ready for use**.
+
+## 4. Run the dashboard
 
 Start the local dashboard:
 

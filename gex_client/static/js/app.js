@@ -125,6 +125,27 @@ async function heartbeat() {
   } catch (_) {}
 }
 
+async function checkSetup() {
+  try {
+    const response = await fetch("/api/setup-status", {cache: "no-store"});
+    const setup = await response.json();
+    const card = $("setup-card");
+    card.hidden = setup.ready;
+    if (!setup.ready) {
+      const state = [
+        `App key: ${setup.client_id_configured ? "configured" : "missing"}`,
+        `App secret: ${setup.client_secret_configured ? "configured" : "missing"}`,
+        `OAuth token: ${setup.token_configured ? "configured" : "missing"}`
+      ];
+      $("setup-state").textContent = state.join("  •  ");
+      $("updated").textContent = "Schwab connection setup required";
+    }
+    return setup.ready;
+  } catch (_) {
+    return false;
+  }
+}
+
 function isMarketRefreshWindow() {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York", hour12: false,
@@ -138,10 +159,10 @@ function isMarketRefreshWindow() {
 $("refresh").addEventListener("click", loadGex);
 $("symbol").addEventListener("change", loadGex);
 heartbeat();
-if (isMarketRefreshWindow()) {
-  loadGex();
-} else {
-  $("updated").textContent = "auto-refresh paused outside market hours";
-}
+checkSetup().then(ready => {
+  if (!ready) return;
+  if (isMarketRefreshWindow()) loadGex();
+  else $("updated").textContent = "connected · auto-refresh paused outside market hours";
+});
 setInterval(heartbeat, 30_000);
 setInterval(() => { if (isMarketRefreshWindow()) loadGex(); }, 30_000);
