@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "foxchase-gex-community"
+version = "0.1.0"
+description = "Open-source local client for the Foxchase GEX dashboard"
+requires-python = ">=3.10"
+dependencies = [
+  "Flask>=3.0,<4",
+  "python-dotenv>=1.0,<2",
+  "requests>=2.31,<3",
+]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]

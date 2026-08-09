@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Foxchase GEX Community</title>
+  <link rel="stylesheet" href="/static/css/style.css">
+  <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span>foxchase</span><strong>gex</strong></div>
+    <div class="presence" aria-live="polite">
+      <i></i> Active sessions: <span id="active-sessions">—</span>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="controls" aria-label="Dashboard controls">
+      <div class="field">
+        <label for="symbol">symbol</label>
+        <select id="symbol">
+          <option value="NDX" selected>NDX</option>
+          <option value="SPX">SPX</option>
+        </select>
+      </div>
+      <button id="refresh" type="button">refresh</button>
+      <div class="status" id="updated">loading local Schwab data…</div>
+    </section>
+
+    <div class="error" id="error" hidden></div>
+
+    <section class="chart-card">
+      <div class="chart-title">
+        <span>gamma exposure</span>
+        <span class="mode">community</span>
+      </div>
+      <div id="pattern-box" class="pattern-box" hidden></div>
+      <div id="gexChart" role="img" aria-label="Gamma exposure by strike"></div>
+      <div class="watermark">foxchasegex.com</div>
+      <div class="unit" id="unit">shares per $ move</div>
+    </section>
+  </main>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
+

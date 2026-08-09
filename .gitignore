@@ -1,0 +1,12 @@
+.DS_Store
+.env
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+schwab_tokens.json
+client.json
+*.db
+*.sqlite*
+
