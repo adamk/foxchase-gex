@@ -15,7 +15,7 @@ load_dotenv()
 app = Flask(__name__, template_folder="templates", static_folder="static")
 app.config.update(
     FOXCHASE_GEX_API_URL=os.getenv(
-        "FOXCHASE_GEX_API_URL", "https://gex.foxchasetrading.com/api/community"
+        "FOXCHASE_GEX_API_URL", "https://compute.foxchasetrading.com/api/community"
     ).rstrip("/"),
     FOXCHASE_GEX_PORT=int(os.getenv("FOXCHASE_GEX_PORT", "8765")),
     MAX_CONTENT_LENGTH=16_384,
