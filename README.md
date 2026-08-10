@@ -4,6 +4,10 @@ This is the open-source, self-run client for the Foxchase Trading SPX/NDX 0DTE g
 
 The GEX calculation and Foxchase Trading Read classifier are intentionally not included in this repository. This client is free to run yourself; a fully hosted version may be offered separately after the required brokerage/data approvals are in place.
 
+Many gamma-exposure dashboards require a recurring subscription. Foxchase Trading GEX provides a free, self-run alternative for technically comfortable traders who are willing to connect and maintain their own approved Schwab developer app.
+
+Subject to the required brokerage and market-data approvals, Foxchase Trading may also offer a premium browser-based version with simplified OAuth, managed hosting, automatic updates, and no local installation.
+
 ## Data boundary
 
 The EC2 request contains only:
