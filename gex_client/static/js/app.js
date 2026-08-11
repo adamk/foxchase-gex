@@ -121,8 +121,12 @@ async function heartbeat() {
       method: "POST", headers: {"X-GEX-Session": sessionId}, cache: "no-store"
     });
     const data = await response.json();
-    if (response.ok) $("active-sessions").textContent = data.online;
-  } catch (_) {}
+    const online = Number(data.online);
+    if (!response.ok || !Number.isFinite(online)) throw new Error("Presence unavailable");
+    $("active-sessions").textContent = String(Math.max(0, Math.trunc(online)));
+  } catch (_) {
+    $("active-sessions").textContent = "—";
+  }
 }
 
 async function checkSetup() {
