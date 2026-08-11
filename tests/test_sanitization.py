@@ -43,3 +43,25 @@ def test_sanitized_payload_contains_no_credentials_or_contract_symbols():
     assert "secret" not in repr(payload).lower()
     assert len(payload["contracts"]) == 2
 
+
+def test_schwab_sentinel_values_are_normalized_before_private_api():
+    expiration = "2026-08-11"
+    call_chain = {
+        "underlyingPrice": 7750.0,
+        "callExpDateMap": {
+            f"{expiration}:0": {
+                "7750.0": [{
+                    "openInterest": 10,
+                    "gamma": float("nan"),
+                    "volatility": 99999,
+                    "multiplier": 100,
+                }]
+            }
+        },
+    }
+    put_chain = {"putExpDateMap": {}}
+
+    payload = sanitize_chains("SPX", call_chain, put_chain, expiration)
+    contract = payload["contracts"][0]
+    assert contract["gamma"] == 0.0
+    assert contract["volatility"] == 0.0

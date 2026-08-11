@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import math
 import os
 import tempfile
 import time
@@ -169,6 +170,13 @@ def _safe_float(value, default=0.0) -> float:
         return float(default)
 
 
+def _bounded_float(value, minimum: float, maximum: float, default: float = 0.0) -> float:
+    result = _safe_float(value, default)
+    if not math.isfinite(result) or result < minimum or result > maximum:
+        return float(default)
+    return result
+
+
 def _spot_from_chain(*chains: dict) -> float:
     for chain in chains:
         for key in ("underlyingPrice", "underlying_price", "lastPrice"):
@@ -204,19 +212,27 @@ def _extract_minimum_contracts(chain_map: dict, option_type: str, expiration: st
                     {
                         "option_type": option_type,
                         "strike": strike,
-                        "open_interest": _safe_float(
-                            contract.get("openInterest", contract.get("open_interest", 0))
+                        "open_interest": _bounded_float(
+                            contract.get("openInterest", contract.get("open_interest", 0)),
+                            0.0,
+                            100_000_000.0,
                         ),
-                        "gamma": _safe_float(
-                            contract.get("gamma", contract.get("theoreticalOptionValueGamma", 0))
+                        "gamma": _bounded_float(
+                            contract.get("gamma", contract.get("theoreticalOptionValueGamma", 0)),
+                            0.0,
+                            10.0,
                         ),
-                        "volatility": _safe_float(
+                        "volatility": _bounded_float(
                             contract.get(
                                 "volatility",
                                 contract.get("impliedVolatility", contract.get("iv", 0)),
-                            )
+                            ),
+                            0.0,
+                            1_000.0,
                         ),
-                        "multiplier": _safe_float(contract.get("multiplier", 100), 100),
+                        "multiplier": _bounded_float(
+                            contract.get("multiplier", 100), 1.0, 1_000.0, 100.0
+                        ),
                     }
                 )
     return rows
@@ -296,4 +312,3 @@ def fetch_sanitized_snapshot(symbol: str) -> dict:
                 continue
             raise
     raise last_error or SchwabError("Schwab option chain request failed")
-
