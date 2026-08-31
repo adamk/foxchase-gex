@@ -49,12 +49,6 @@ def test_gex_route_connects_sanitized_snapshot_to_private_compute(monkeypatch):
     assert response.json["strikes"] == computed["strikes"]
     assert response.json["client_cached"] is False
 
-    archive_response = client.get(
-        "/api/gex/SPX",
-        headers={"X-GEX-Session": "route-test-session", "X-GEX-Archive-Inputs": "1"},
-    )
-    assert archive_response.status_code == 200
-    assert archive_response.json["_archive_causal_input"] == snapshot
 
 
 def test_presence_route_proxies_anonymous_session(monkeypatch):

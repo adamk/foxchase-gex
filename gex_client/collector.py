@@ -15,7 +15,7 @@ import requests
 from gex_client.archive import archive_snapshot, verify_archive_mount
 from gex_client.forward_audit import archive_forward_audit
 from gex_client.health import record_attempt
-from gex_client.schwab import get_access_token
+from gex_client.schwab import fetch_sanitized_snapshot, get_access_token
 
 
 NY = ZoneInfo("America/New_York")
@@ -35,9 +35,14 @@ def _source_hash(path: str) -> str:
 def collect_once(base_url: str, symbol: str, session_id: str) -> None:
     verify_archive_mount()
     request_stamp = datetime.now(NY).isoformat(timespec="microseconds")
-    response = requests.get(
-        f"{base_url.rstrip('/')}/api/gex/{symbol}",
-        headers={"X-GEX-Session": session_id, "X-GEX-Archive-Inputs": "1", "Accept": "application/json"},
+    causal_input = fetch_sanitized_snapshot(symbol)
+    compute_url = os.getenv(
+        "FOXCHASE_GEX_API_URL", "https://compute.foxchasetrading.com/api/community"
+    ).rstrip("/")
+    response = requests.post(
+        f"{compute_url}/gex",
+        headers={"X-GEX-Session": session_id, "Accept": "application/json"},
+        json=causal_input,
         timeout=55,
     )
     response_stamp = datetime.now(NY).isoformat(timespec="microseconds")
@@ -47,9 +52,6 @@ def collect_once(base_url: str, symbol: str, session_id: str) -> None:
         raise RuntimeError("local GEX service returned invalid JSON") from exc
     if not response.ok:
         raise RuntimeError(str(result.get("error", f"HTTP {response.status_code}")))
-    causal_input = result.pop("_archive_causal_input", None)
-    if not isinstance(causal_input, dict) or not causal_input.get("contracts"):
-        raise RuntimeError("local GEX service omitted causal archive inputs")
     # Presence is transient and is not meaningful in a historical record.
     result.pop("online", None)
     result.pop("client_cached", None)

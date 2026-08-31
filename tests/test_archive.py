@@ -53,13 +53,6 @@ def test_collector_archives_computed_result_without_transient_fields(monkeypatch
         def json(self):
             return {
                 **computed(),
-                "_archive_causal_input": {
-                    "symbol": "SPX", "spot": 7752.5,
-                    "expiration_date": datetime.now(NY).date().isoformat(),
-                    "contracts": [{"option_type":"CALL", "strike":7750,
-                                   "open_interest":100, "gamma":.004,
-                                   "volatility":.18, "multiplier":100}],
-                },
                 "online": 3,
                 "client_cached": False,
                 "client_cache_age_seconds": 0,
@@ -67,16 +60,21 @@ def test_collector_archives_computed_result_without_transient_fields(monkeypatch
 
     captured_headers = {}
 
-    def fake_get(_url, headers, timeout):
+    def fake_post(_url, headers, json, timeout):
         captured_headers.update(headers)
         assert timeout == 55
         return Response()
 
-    monkeypatch.setattr("gex_client.collector.requests.get", fake_get)
+    causal_input = {"symbol":"SPX", "spot":7752.5,
+                    "expiration_date":datetime.now(NY).date().isoformat(),
+                    "contracts":[{"option_type":"CALL","strike":7750,
+                                  "open_interest":100,"gamma":.004,
+                                  "volatility":.18,"multiplier":100}]}
+    monkeypatch.setattr("gex_client.collector.fetch_sanitized_snapshot", lambda symbol: causal_input)
+    monkeypatch.setattr("gex_client.collector.requests.post", fake_post)
     collect_once("http://127.0.0.1:8765", "SPX", "collector-spx")
 
     saved = snapshot("SPX", datetime.now(NY).date().isoformat(), 0)
     assert captured_headers["X-GEX-Session"] == "collector-spx"
-    assert captured_headers["X-GEX-Archive-Inputs"] == "1"
     assert "online" not in saved
     assert "client_cached" not in saved

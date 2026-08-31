@@ -92,15 +92,9 @@ def gex(symbol: str):
             return jsonify({"error": "supported symbols are SPX and NDX"}), 400
 
         now = time.time()
-        archive_request = (
-            request.headers.get("X-GEX-Archive-Inputs") == "1"
-            and request.remote_addr in {"127.0.0.1", "::1"}
-        )
         cached = _RESULT_CACHE.get(display_symbol)
         if cached and now - cached["timestamp"] < _RESULT_CACHE_SECONDS:
             result = dict(cached["result"])
-            if archive_request and cached.get("causal_input"):
-                result["_archive_causal_input"] = cached["causal_input"]
             result["client_cached"] = True
             result["client_cache_age_seconds"] = round(now - cached["timestamp"], 1)
             return jsonify(result)
@@ -111,13 +105,7 @@ def gex(symbol: str):
             return jsonify(result), status
         result["client_cached"] = False
         result["client_cache_age_seconds"] = 0
-        _RESULT_CACHE[display_symbol] = {
-            "timestamp": now,
-            "result": dict(result),
-            "causal_input": snapshot,
-        }
-        if archive_request:
-            result["_archive_causal_input"] = snapshot
+        _RESULT_CACHE[display_symbol] = {"timestamp": now, "result": dict(result)}
         return jsonify(result)
     except (SchwabError, ValueError) as exc:
         return jsonify({"error": str(exc)}), 400
