@@ -14,8 +14,8 @@ import requests
 
 from gex_client.archive import archive_snapshot, verify_archive_mount
 from gex_client.auth_health import (
-    emit_due_alert, emit_recovery_if_pending, load_status, mark_alert_sent,
-    send_dashboard_alert,
+    authorization_state, emit_due_alert, emit_recovery_if_pending, load_status,
+    mark_alert_sent, send_dashboard_alert,
 )
 from gex_client.forward_audit import archive_forward_audit
 from gex_client.health import record_attempt
