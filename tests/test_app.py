@@ -49,6 +49,13 @@ def test_gex_route_connects_sanitized_snapshot_to_private_compute(monkeypatch):
     assert response.json["strikes"] == computed["strikes"]
     assert response.json["client_cached"] is False
 
+    archive_response = client.get(
+        "/api/gex/SPX",
+        headers={"X-GEX-Session": "route-test-session", "X-GEX-Archive-Inputs": "1"},
+    )
+    assert archive_response.status_code == 200
+    assert archive_response.json["_archive_causal_input"] == snapshot
+
 
 def test_presence_route_proxies_anonymous_session(monkeypatch):
     def fake_remote(method, path, session_id, payload=None):
@@ -92,3 +99,32 @@ def test_setup_status_never_returns_credentials(monkeypatch, tmp_path):
         "token_configured": False,
     }
     assert "private-client" not in response.get_data(as_text=True)
+
+
+def test_history_routes(monkeypatch, tmp_path):
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+
+    from gex_client.archive import archive_snapshot
+
+    monkeypatch.setenv("FOXCHASE_GEX_DATA_DIR", str(tmp_path))
+    archive_snapshot(
+        "NDX",
+        {
+            "display_symbol": "NDX",
+            "spot": 25000,
+            "strikes": [{"strike": 25000, "gex": -0.5}],
+        },
+        datetime(2026, 8, 20, 11, 0, tzinfo=ZoneInfo("America/New_York")),
+    )
+    client = app_module.app.test_client()
+
+    sessions = client.get("/api/history/NDX/sessions")
+    assert sessions.status_code == 200
+    assert sessions.json["sessions"][0]["captures"] == 1
+    timeline = client.get("/api/history/NDX/2026-08-20/timeline")
+    assert timeline.status_code == 200
+    assert timeline.json["timeline"][0]["spot"] == 25000
+    result = client.get("/api/history/NDX/2026-08-20/snapshot?index=0")
+    assert result.status_code == 200
+    assert result.json["historical"] is True

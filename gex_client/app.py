@@ -7,6 +7,7 @@ import requests
 from dotenv import load_dotenv
 from flask import Flask, jsonify, render_template, request
 
+from gex_client.archive import list_sessions, snapshot, timeline
 from gex_client.schwab import SchwabError, fetch_sanitized_snapshot, token_path
 
 
@@ -91,9 +92,15 @@ def gex(symbol: str):
             return jsonify({"error": "supported symbols are SPX and NDX"}), 400
 
         now = time.time()
+        archive_request = (
+            request.headers.get("X-GEX-Archive-Inputs") == "1"
+            and request.remote_addr in {"127.0.0.1", "::1"}
+        )
         cached = _RESULT_CACHE.get(display_symbol)
         if cached and now - cached["timestamp"] < _RESULT_CACHE_SECONDS:
             result = dict(cached["result"])
+            if archive_request and cached.get("causal_input"):
+                result["_archive_causal_input"] = cached["causal_input"]
             result["client_cached"] = True
             result["client_cache_age_seconds"] = round(now - cached["timestamp"], 1)
             return jsonify(result)
@@ -104,7 +111,13 @@ def gex(symbol: str):
             return jsonify(result), status
         result["client_cached"] = False
         result["client_cache_age_seconds"] = 0
-        _RESULT_CACHE[display_symbol] = {"timestamp": now, "result": dict(result)}
+        _RESULT_CACHE[display_symbol] = {
+            "timestamp": now,
+            "result": dict(result),
+            "causal_input": snapshot,
+        }
+        if archive_request:
+            result["_archive_causal_input"] = snapshot
         return jsonify(result)
     except (SchwabError, ValueError) as exc:
         return jsonify({"error": str(exc)}), 400
@@ -122,3 +135,34 @@ def presence():
         return jsonify({"error": str(exc)}), 400
     except RuntimeError as exc:
         return jsonify({"error": str(exc)}), 502
+
+
+@app.get("/api/history/<symbol>/sessions")
+def history_sessions(symbol: str):
+    try:
+        return jsonify({"symbol": symbol.upper(), "sessions": list_sessions(symbol)})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.get("/api/history/<symbol>/<day>/timeline")
+def history_timeline(symbol: str, day: str):
+    try:
+        points = timeline(symbol, day)
+        if not points:
+            return jsonify({"error": "historical session not found"}), 404
+        return jsonify({"symbol": symbol.upper(), "date": day, "timeline": points})
+    except ValueError as exc:
+        return jsonify({"error": str(exc)}), 400
+
+
+@app.get("/api/history/<symbol>/<day>/snapshot")
+def history_snapshot(symbol: str, day: str):
+    try:
+        index = int(request.args.get("index", "-1"))
+        result = snapshot(symbol, day, index)
+        if result is None:
+            return jsonify({"error": "historical snapshot not found"}), 404
+        return jsonify(result)
+    except (TypeError, ValueError) as exc:
+        return jsonify({"error": str(exc)}), 400
