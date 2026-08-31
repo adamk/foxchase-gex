@@ -13,6 +13,10 @@ from zoneinfo import ZoneInfo
 import requests
 
 from gex_client.archive import archive_snapshot, verify_archive_mount
+from gex_client.auth_health import (
+    emit_due_alert, emit_recovery_if_pending, load_status, mark_alert_sent,
+    send_dashboard_alert,
+)
 from gex_client.forward_audit import archive_forward_audit
 from gex_client.health import record_attempt
 from gex_client.schwab import fetch_sanitized_snapshot, get_access_token
@@ -97,18 +101,56 @@ def main() -> None:
     interval = max(30, args.interval)
     session_id = "foxchase-gex-headless-collector"
     auth_probe_day = None
+    terminal_auth_failure = False
+    last_terminal_reprobe = 0.0
 
     while True:
         now = datetime.now(NY)
         minute = now.hour * 60 + now.minute
         if now.weekday() < 5 and 8 * 60 + 45 <= minute < 9 * 60 + 30 and auth_probe_day != now.date():
-            try:
-                get_access_token()
-                print(f"{now.isoformat(timespec='seconds')} auth probe PASS", flush=True)
-            except Exception as exc:
-                print(f"{now.isoformat(timespec='seconds')} [GEXAlert] auth probe FAILED: {type(exc).__name__}", flush=True)
+            lifecycle = authorization_state(load_status())
+            if lifecycle["health"] == "reauthorization_required":
+                terminal_auth_failure = True
+                state = load_status()
+                if not (state.get("alerts_sent") or {}).get("required"):
+                    if send_dashboard_alert("required", state):
+                        mark_alert_sent("required")
+                print(f"{now.isoformat(timespec='seconds')} [GEXAlert] reauthorization required before market open", flush=True)
+            else:
+                try:
+                    get_access_token()
+                    terminal_auth_failure = False
+                    emit_due_alert()
+                    emit_recovery_if_pending()
+                    print(f"{now.isoformat(timespec='seconds')} auth probe PASS", flush=True)
+                except Exception as exc:
+                    state = load_status()
+                    terminal_auth_failure = state.get("health") == "reauthorization_required"
+                    if terminal_auth_failure and not (state.get("alerts_sent") or {}).get("required"):
+                        if send_dashboard_alert("required", state):
+                            mark_alert_sent("required")
+                    print(f"{now.isoformat(timespec='seconds')} [GEXAlert] auth probe FAILED: {type(exc).__name__}", flush=True)
             auth_probe_day = now.date()
         if args.once or in_collection_window(now):
+            # A terminal OAuth failure is one incident, not 385 provider calls.
+            # Probe no more than every 15 minutes so a completed interactive
+            # reauthorization can recover without restarting this collector.
+            if terminal_auth_failure:
+                if time.time() - last_terminal_reprobe < 900:
+                    if args.once:
+                        break
+                    time.sleep(interval)
+                    continue
+                last_terminal_reprobe = time.time()
+                try:
+                    get_access_token()
+                    terminal_auth_failure = False
+                    emit_recovery_if_pending()
+                except Exception:
+                    if args.once:
+                        break
+                    time.sleep(interval)
+                    continue
             for symbol in ("SPX", "NDX"):
                 try:
                     # The calculation service rate-limits each anonymous session.

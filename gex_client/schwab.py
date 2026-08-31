@@ -16,6 +16,12 @@ from zoneinfo import ZoneInfo
 import requests
 from dotenv import load_dotenv
 
+from gex_client.auth_health import (
+    record_auth_failure,
+    record_interactive_authorization,
+    record_refresh_success,
+)
+
 
 load_dotenv()
 
@@ -122,6 +128,7 @@ def exchange_authorization_response(value: str) -> dict:
         )
     tokens = response.json()
     save_tokens(tokens)
+    record_interactive_authorization()
     return tokens
 
 
@@ -140,12 +147,20 @@ def _refresh_tokens(tokens: dict) -> dict:
         timeout=30,
     )
     if not response.ok:
+        error_name = "refresh_failed"
+        try:
+            error_name = str(response.json().get("error") or error_name)
+        except (TypeError, ValueError):
+            pass
+        if error_name in {"invalid_grant", "invalid_client"}:
+            record_auth_failure(error_name)
         raise SchwabError(
             f"Schwab token refresh failed ({response.status_code}): {response.text[:500]}"
         )
     refreshed = response.json()
     refreshed.setdefault("refresh_token", refresh_token)
     save_tokens(refreshed)
+    record_refresh_success()
     return refreshed
 
 

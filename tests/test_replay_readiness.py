@@ -59,6 +59,7 @@ def test_successful_refresh_is_securely_persisted(monkeypatch,tmp_path):
     monkeypatch.setenv("SCHWAB_CLIENT_ID","configured")
     monkeypatch.setenv("SCHWAB_CLIENT_SECRET","configured")
     monkeypatch.setenv("SCHWAB_TOKEN_PATH",str(tmp_path/"tokens.json"))
+    monkeypatch.setenv("SCHWAB_AUTH_HEALTH_PATH",str(tmp_path/"auth-health.json"))
     monkeypatch.setattr(schwab.requests,"post",lambda *a,**k: FakeResponse(200,{
         "access_token":"new-access","refresh_token":"new-refresh","expires_in":1800}))
     value=schwab._refresh_tokens({"refresh_token":"old-refresh"})
@@ -68,9 +69,10 @@ def test_successful_refresh_is_securely_persisted(monkeypatch,tmp_path):
     assert oct((tmp_path/"tokens.json").stat().st_mode & 0o777) == "0o600"
 
 
-def test_revoked_or_expired_refresh_fails_without_token_leak(monkeypatch):
+def test_revoked_or_expired_refresh_fails_without_token_leak(monkeypatch,tmp_path):
     monkeypatch.setenv("SCHWAB_CLIENT_ID","configured")
     monkeypatch.setenv("SCHWAB_CLIENT_SECRET","configured")
+    monkeypatch.setenv("SCHWAB_AUTH_HEALTH_PATH",str(tmp_path/"auth-health.json"))
     monkeypatch.setattr(schwab.requests,"post",lambda *a,**k: FakeResponse(400,{
         "error":"invalid_grant","error_description":"refresh token invalid"}))
     try:
