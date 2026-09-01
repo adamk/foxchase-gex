@@ -180,6 +180,33 @@ def send_dashboard_alert(kind: str, state: dict | None = None, now: float | None
         return False
 
 
+def send_dashboard_status(collector_available: bool, now: float | None = None) -> bool:
+    state = load_status()
+    view = authorization_state(state, now)
+    event_url = os.getenv("FOXCHASE_DASHBOARD_EVENT_URL", "").strip()
+    token = os.getenv("FOXCHASE_DASHBOARD_EVENT_TOKEN", "").strip()
+    if not event_url or not token:
+        return False
+    url = event_url.replace("/api/bot-events", "/api/gex-auth-status")
+    stamp = datetime.fromtimestamp(float(now if now is not None else time.time()), timezone.utc)
+    payload = {
+        "state": view["health"],
+        "authorization_due_at": view["due_at"],
+        "last_check_at": stamp.isoformat(),
+        "collector_available": bool(collector_available and view["health"] != "reauthorization_required"),
+    }
+    try:
+        response = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
+            json=payload,
+            timeout=10,
+        )
+        return response.ok
+    except requests.RequestException:
+        return False
+
+
 def mark_alert_sent(kind: str, now: float | None = None) -> None:
     epoch = float(now if now is not None else time.time())
     state = load_status()

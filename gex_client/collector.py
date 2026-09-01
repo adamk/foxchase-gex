@@ -15,7 +15,7 @@ import requests
 from gex_client.archive import archive_snapshot, verify_archive_mount
 from gex_client.auth_health import (
     authorization_state, emit_due_alert, emit_recovery_if_pending, load_status,
-    mark_alert_sent, send_dashboard_alert,
+    mark_alert_sent, send_dashboard_alert, send_dashboard_status,
 )
 from gex_client.forward_audit import archive_forward_audit
 from gex_client.health import record_attempt
@@ -103,10 +103,14 @@ def main() -> None:
     auth_probe_day = None
     terminal_auth_failure = False
     last_terminal_reprobe = 0.0
+    last_status_sync = 0.0
 
     while True:
         now = datetime.now(NY)
         minute = now.hour * 60 + now.minute
+        if time.time() - last_status_sync >= 900:
+            send_dashboard_status(not terminal_auth_failure)
+            last_status_sync = time.time()
         if now.weekday() < 5 and 8 * 60 + 45 <= minute < 9 * 60 + 30 and auth_probe_day != now.date():
             lifecycle = authorization_state(load_status())
             if lifecycle["health"] == "reauthorization_required":

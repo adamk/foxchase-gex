@@ -98,3 +98,21 @@ def test_no_external_channel_does_not_mark_delivered(monkeypatch, tmp_path):
     auth_health.record_interactive_authorization(start)
     assert auth_health.emit_due_alert(start + 5 * 86400) is None
     assert auth_health.load_status()["alerts_sent"] == {}
+
+
+def test_dashboard_status_is_sanitized(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    monkeypatch.setenv("FOXCHASE_DASHBOARD_EVENT_URL", "https://private.example/api/bot-events")
+    monkeypatch.setenv("FOXCHASE_DASHBOARD_EVENT_TOKEN", "private-token")
+    auth_health.record_interactive_authorization(epoch("2026-08-31T12:00:00"))
+    captured = {}
+    class Response: ok = True
+    def post(url, **kwargs):
+        captured.update(url=url, payload=kwargs["json"])
+        return Response()
+    monkeypatch.setattr(auth_health.requests, "post", post)
+    assert auth_health.send_dashboard_status(True, epoch("2026-09-01T12:00:00"))
+    assert captured["url"].endswith("/api/gex-auth-status")
+    encoded = json.dumps(captured["payload"])
+    assert set(captured["payload"]) == {"state", "authorization_due_at", "last_check_at", "collector_available"}
+    assert "private-token" not in encoded
