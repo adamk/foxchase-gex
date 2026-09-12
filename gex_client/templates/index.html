@@ -24,6 +24,17 @@
           <option value="SPX">SPX</option>
         </select>
       </div>
+      <div class="field history-field" id="history-field">
+        <label for="history-session">historical session</label>
+        <select id="history-session">
+          <option value="">live</option>
+          <option value="" disabled>no archived sessions yet</option>
+        </select>
+      </div>
+      <div class="field history-time-field" id="history-time-field" hidden>
+        <label for="history-time">snapshot <span id="history-time-label"></span></label>
+        <input id="history-time" type="range" min="0" max="0" value="0">
+      </div>
       <button id="refresh" type="button">refresh</button>
       <div class="status" id="updated">loading local Schwab data…</div>
     </section>
@@ -49,7 +60,7 @@
     <section class="chart-card">
       <div class="chart-title">
         <span>gamma exposure</span>
-        <span class="mode">local</span>
+        <span class="mode" id="chart-mode">live · local</span>
       </div>
       <div id="pattern-box" class="pattern-box" hidden></div>
       <div id="gexChart" role="img" aria-label="Gamma exposure by strike"></div>

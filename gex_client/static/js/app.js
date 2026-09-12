@@ -7,6 +7,8 @@ if (!sessionId) {
 
 const $ = id => document.getElementById(id);
 let loadInFlight = false;
+let historyTimeline = [];
+let historyLoadTimer = null;
 
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, character => ({
@@ -88,6 +90,31 @@ function renderChart(data, symbol) {
   Plotly.react("gexChart", traces, layout, {displayModeBar: false, responsive: true});
 }
 
+function formatHistoricalTime(value) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York", hour: "numeric", minute: "2-digit", second: "2-digit"
+  }).format(date);
+}
+
+function renderResult(data, symbol, historical = false) {
+  renderPattern(data);
+  renderChart(data, symbol);
+  if (historical) {
+    const stamp = data.captured_at || data.updated_at;
+    $("updated").textContent = `${symbol} historical · ${data.historical_date} · ${formatHistoricalTime(stamp)} ET`;
+    $("chart-mode").textContent = "historical · local archive";
+  } else {
+    $("updated").textContent = `${data.display_symbol || symbol} updated ${data.updated_at}`;
+    $("chart-mode").textContent = "live · local";
+  }
+  $("unit").textContent = data.unit || "shares per $ move";
+  if (!historical && Number.isFinite(Number(data.online))) {
+    $("active-sessions").textContent = data.online;
+  }
+}
+
 async function loadGex() {
   if (loadInFlight) return;
   loadInFlight = true;
@@ -101,17 +128,85 @@ async function loadGex() {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "GEX request failed");
-    renderPattern(data);
-    renderChart(data, symbol);
-    $("updated").textContent = `${data.display_symbol || symbol} updated ${data.updated_at}`;
-    $("unit").textContent = data.unit || "shares per $ move";
-    if (Number.isFinite(Number(data.online))) $("active-sessions").textContent = data.online;
+    renderResult(data, symbol, false);
   } catch (error) {
     showError(error.message);
     $("updated").textContent = "not connected";
   } finally {
     loadInFlight = false;
     $("refresh").disabled = false;
+  }
+}
+
+async function loadHistorySessions() {
+  const symbol = $("symbol").value;
+  const picker = $("history-session");
+  const selected = picker.value;
+  try {
+    const response = await fetch(`/api/history/${symbol}/sessions`, {cache: "no-store"});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "history lookup failed");
+    const sessions = data.sessions || [];
+    picker.innerHTML = `<option value="">live</option>` + sessions.map(session =>
+      `<option value="${escapeHtml(session.date)}">${escapeHtml(session.date)} · ${session.captures} snapshots</option>`
+    ).join("") + (sessions.length ? "" : `<option value="" disabled>no archived sessions yet</option>`);
+    picker.value = sessions.some(session => session.date === selected) ? selected : "";
+    if (!picker.value) {
+      $("history-time-field").hidden = true;
+      historyTimeline = [];
+    }
+  } catch (_) {
+    picker.innerHTML = `<option value="">live</option><option value="" disabled>archive unavailable</option>`;
+    $("history-time-field").hidden = true;
+  }
+}
+
+async function loadHistoryTimeline() {
+  const symbol = $("symbol").value;
+  const day = $("history-session").value;
+  if (!day) {
+    historyTimeline = [];
+    $("history-time-field").hidden = true;
+    loadGex();
+    return;
+  }
+  showError();
+  $("updated").textContent = `loading ${symbol} archive for ${day}…`;
+  try {
+    const response = await fetch(`/api/history/${symbol}/${day}/timeline`, {cache: "no-store"});
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "historical session failed");
+    historyTimeline = data.timeline || [];
+    const slider = $("history-time");
+    slider.min = "0";
+    slider.max = String(Math.max(0, historyTimeline.length - 1));
+    slider.value = slider.max;
+    $("history-time-field").hidden = historyTimeline.length === 0;
+    await loadHistoricalSnapshot();
+  } catch (error) {
+    showError(error.message);
+    $("updated").textContent = "historical archive unavailable";
+  }
+}
+
+async function loadHistoricalSnapshot() {
+  const symbol = $("symbol").value;
+  const day = $("history-session").value;
+  const index = Number($("history-time").value || 0);
+  const point = historyTimeline[index];
+  $("history-time-label").textContent = point ? formatHistoricalTime(point.captured_at) : "";
+  if (!day || !point) return;
+  try {
+    const response = await fetch(
+      `/api/history/${symbol}/${day}/snapshot?index=${encodeURIComponent(index)}`,
+      {cache: "no-store"}
+    );
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "historical snapshot failed");
+    renderResult(data, symbol, true);
+    showError();
+  } catch (error) {
+    showError(error.message);
   }
 }
 
@@ -160,13 +255,31 @@ function isMarketRefreshWindow() {
   return !["Sat", "Sun"].includes(values.weekday) && minutes >= 565 && minutes <= 970;
 }
 
-$("refresh").addEventListener("click", loadGex);
-$("symbol").addEventListener("change", loadGex);
+$("refresh").addEventListener("click", () => {
+  if ($("history-session").value) loadHistoricalSnapshot();
+  else loadGex();
+});
+$("symbol").addEventListener("change", async () => {
+  $("history-session").value = "";
+  await loadHistorySessions();
+  loadGex();
+});
+$("history-session").addEventListener("change", loadHistoryTimeline);
+$("history-time").addEventListener("input", () => {
+  const index = Number($("history-time").value || 0);
+  const point = historyTimeline[index];
+  $("history-time-label").textContent = point ? formatHistoricalTime(point.captured_at) : "";
+  clearTimeout(historyLoadTimer);
+  historyLoadTimer = setTimeout(loadHistoricalSnapshot, 100);
+});
 heartbeat();
+loadHistorySessions();
 checkSetup().then(ready => {
   if (!ready) return;
   if (isMarketRefreshWindow()) loadGex();
   else $("updated").textContent = "connected · auto-refresh paused outside market hours";
 });
 setInterval(heartbeat, 30_000);
-setInterval(() => { if (isMarketRefreshWindow()) loadGex(); }, 30_000);
+setInterval(() => {
+  if (isMarketRefreshWindow() && !$("history-session").value) loadGex();
+}, 30_000);

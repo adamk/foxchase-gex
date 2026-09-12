@@ -1,0 +1,21 @@
+[Unit]
+Description=Foxchase GEX dashboard and local calculation client
+After=network-online.target mnt-t7.mount
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=pi
+WorkingDirectory=/home/pi/foxchase-gex
+EnvironmentFile=/home/pi/foxchase-gex/.env
+Environment=FOXCHASE_GEX_HOST=0.0.0.0
+Environment=FOXCHASE_GEX_DATA_DIR=/mnt/t7/foxchase-gex/archive
+ExecStart=/home/pi/foxchase-gex/.venv/bin/python /home/pi/foxchase-gex/run.py
+Restart=on-failure
+RestartSec=5
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

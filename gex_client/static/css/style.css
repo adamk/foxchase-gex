@@ -45,6 +45,9 @@ select, button {
 }
 button { cursor: pointer; }
 button:disabled { cursor: wait; opacity: .55; }
+.history-time-field { min-width: 230px; }
+.history-time-field label span { color: #ddd; font-variant-numeric: tabular-nums; }
+.history-time-field input { width: 230px; accent-color: #d8a900; }
 .status { padding-bottom: 9px; color: #999; font-size: 12px; }
 .error {
   margin: 0 0 8px; padding: 9px 12px; color: #ffd5d5; background: #401d1d;
@@ -103,6 +106,8 @@ button:disabled { cursor: wait; opacity: .55; }
   .topbar { padding: 0 14px; }
   .page { padding: 10px; }
   .controls { flex-wrap: wrap; }
+  .history-time-field { width: 100%; }
+  .history-time-field input { width: 100%; }
   .status { flex-basis: 100%; padding: 0; }
   .pattern-box { top: 38px; left: 10px; right: 10px; width: auto; }
   .chart-card { height: calc(100vh - 130px); }
