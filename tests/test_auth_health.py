@@ -152,6 +152,59 @@ def test_refresh_lock_reuses_rotated_token_after_concurrent_refresh(monkeypatch,
     assert (tmp_path / "tokens.json.lock").stat().st_mode & 0o777 == 0o600
 
 
+def test_concurrent_permanent_failure_is_submitted_once(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    token_file = tmp_path / "tokens.json"
+    token_file.write_text(
+        json.dumps({
+            "access_token": "expired",
+            "refresh_token": "old-refresh",
+            "expires_in": 1800,
+            "saved_at": 0,
+        }),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("SCHWAB_CLIENT_ID", "client")
+    monkeypatch.setenv("SCHWAB_CLIENT_SECRET", "secret")
+    barrier = threading.Barrier(2)
+    calls = []
+
+    class Response:
+        ok = False
+        status_code = 400
+        text = '{"error":"unsupported_token_type"}'
+
+        def json(self):
+            return {
+                "error": "unsupported_token_type",
+                "error_description": json.dumps({"error": "invalid_grant"}),
+            }
+
+    def post(*args, **kwargs):
+        calls.append(kwargs["data"]["refresh_token"])
+        time.sleep(0.05)
+        return Response()
+
+    monkeypatch.setattr(schwab.requests, "post", post)
+
+    def refresh():
+        barrier.wait()
+        try:
+            schwab._refresh_tokens({"refresh_token": "old-refresh"})
+        except schwab.SchwabError:
+            return
+        raise AssertionError("permanent refresh failure was accepted")
+
+    threads = [threading.Thread(target=refresh) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert calls == ["old-refresh"]
+    assert auth_health.load_status()["last_failure_class"] == "invalid_grant"
+
+
 def test_refresh_request_uses_schwab_form_semantics(monkeypatch, tmp_path):
     configure(monkeypatch, tmp_path)
     monkeypatch.setenv("SCHWAB_CLIENT_ID", "client")
@@ -207,7 +260,7 @@ def test_successful_refresh_rotation_and_no_token_in_metadata(monkeypatch, tmp_p
     monkeypatch.setenv("SCHWAB_TOKEN_PATH", str(tmp_path / "tokens.json"))
     monkeypatch.setenv("SCHWAB_CLIENT_ID", "client")
     monkeypatch.setenv("SCHWAB_CLIENT_SECRET", "secret")
-    auth_health.record_interactive_authorization(1000)
+    auth_health.record_interactive_authorization(time.time())
     class Response:
         ok = True
         status_code = 200

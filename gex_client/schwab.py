@@ -192,8 +192,18 @@ def _oauth_error_name(payload) -> str:
     return "refresh_failed"
 
 
+def _reauthorization_required() -> bool:
+    state = load_status()
+    return (
+        state.get("health") == "reauthorization_required"
+        or authorization_state(state)["health"] == "reauthorization_required"
+    )
+
+
 def _refresh_tokens(tokens: dict) -> dict:
     with _token_store_lock():
+        if _reauthorization_required():
+            raise SchwabError("Schwab reauthorization required; run `python -m gex_client.login`")
         current = load_tokens()
         if isinstance(current, dict) and _access_token_is_fresh(current):
             return current
@@ -243,11 +253,7 @@ def get_access_token() -> str:
     saved_at = int(tokens.get("saved_at", 0))
     expires_in = int(tokens.get("expires_in", 1800))
     if time.time() >= saved_at + expires_in - 90:
-        health_state = load_status()
-        if (
-            health_state.get("health") == "reauthorization_required"
-            or authorization_state(health_state)["health"] == "reauthorization_required"
-        ):
+        if _reauthorization_required():
             raise SchwabError("Schwab reauthorization required; run `python -m gex_client.login`")
         tokens = _refresh_tokens(tokens)
     access_token = tokens.get("access_token")
