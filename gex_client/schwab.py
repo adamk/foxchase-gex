@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import base64
+import fcntl
 import json
 import math
 import os
 import tempfile
 import time
+from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
@@ -17,6 +19,8 @@ import requests
 from dotenv import load_dotenv
 
 from gex_client.auth_health import (
+    authorization_state,
+    load_status,
     record_auth_failure,
     record_interactive_authorization,
     record_refresh_success,
@@ -66,7 +70,23 @@ def _basic_auth_header(client_id: str, client_secret: str) -> str:
     return "Basic " + base64.b64encode(raw).decode("ascii")
 
 
-def save_tokens(tokens: dict) -> None:
+@contextmanager
+def _token_store_lock():
+    """Serialize token reads/writes across dashboard and collector processes."""
+    destination = token_path()
+    destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    lock_path = destination.with_name(destination.name + ".lock")
+    lock_path.touch(mode=0o600, exist_ok=True)
+    os.chmod(lock_path, 0o600)
+    with lock_path.open("r+", encoding="utf-8") as lock:
+        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
+        try:
+            yield
+        finally:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+
+
+def _save_tokens_unlocked(tokens: dict) -> None:
     destination = token_path()
     destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     payload = dict(tokens)
@@ -79,10 +99,19 @@ def save_tokens(tokens: dict) -> None:
         with os.fdopen(handle, "w", encoding="utf-8") as stream:
             json.dump(payload, stream, indent=2)
             stream.write("\n")
+            stream.flush()
+            os.fsync(stream.fileno())
         os.replace(temporary_name, destination)
     finally:
         if os.path.exists(temporary_name):
             os.unlink(temporary_name)
+
+
+def save_tokens(tokens: dict) -> None:
+    destination = token_path()
+    destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with _token_store_lock():
+        _save_tokens_unlocked(tokens)
 
 
 def load_tokens() -> dict | None:
@@ -132,36 +161,79 @@ def exchange_authorization_response(value: str) -> dict:
     return tokens
 
 
+def _access_token_is_fresh(tokens: dict, now: float | None = None) -> bool:
+    try:
+        epoch = time.time() if now is None else float(now)
+        saved_at = int(tokens.get("saved_at", 0))
+        expires_in = int(tokens.get("expires_in", 1800))
+        return bool(tokens.get("access_token")) and epoch < saved_at + expires_in - 90
+    except (AttributeError, TypeError, ValueError, OverflowError):
+        return False
+
+
+def _oauth_error_name(payload) -> str:
+    """Extract permanent OAuth failures even when an upstream wraps JSON."""
+    permanent = ("invalid_grant", "invalid_client")
+    if isinstance(payload, dict):
+        for key in ("error", "error_description"):
+            value = payload.get(key)
+            if isinstance(value, str):
+                for name in permanent:
+                    if value == name or name in value:
+                        return name
+                try:
+                    nested = json.loads(value)
+                except (TypeError, ValueError):
+                    nested = None
+                nested_name = _oauth_error_name(nested)
+                if nested_name in permanent:
+                    return nested_name
+        return str(payload.get("error") or "refresh_failed")
+    return "refresh_failed"
+
+
 def _refresh_tokens(tokens: dict) -> dict:
-    refresh_token = tokens.get("refresh_token")
-    if not refresh_token:
-        raise SchwabError("refresh token is missing; run the login command again")
-    client_id, client_secret, _ = _credentials()
-    response = requests.post(
-        TOKEN_URL,
-        headers={
-            "Authorization": _basic_auth_header(client_id, client_secret),
-            "Content-Type": "application/x-www-form-urlencoded",
-        },
-        data={"grant_type": "refresh_token", "refresh_token": refresh_token},
-        timeout=30,
-    )
-    if not response.ok:
-        error_name = "refresh_failed"
-        try:
-            error_name = str(response.json().get("error") or error_name)
-        except (TypeError, ValueError):
-            pass
-        if error_name in {"invalid_grant", "invalid_client"}:
-            record_auth_failure(error_name)
-        raise SchwabError(
-            f"Schwab token refresh failed ({response.status_code}): {response.text[:500]}"
+    with _token_store_lock():
+        current = load_tokens()
+        if isinstance(current, dict) and _access_token_is_fresh(current):
+            return current
+        current = current if isinstance(current, dict) else tokens
+        if not isinstance(current, dict):
+            raise SchwabError("Schwab token state is malformed; run the login command again")
+        refresh_token = current.get("refresh_token")
+        if not refresh_token:
+            raise SchwabError("refresh token is missing; run the login command again")
+        client_id, client_secret, _ = _credentials()
+        response = requests.post(
+            TOKEN_URL,
+            headers={
+                "Authorization": _basic_auth_header(client_id, client_secret),
+                "Content-Type": "application/x-www-form-urlencoded",
+            },
+            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+            timeout=30,
         )
-    refreshed = response.json()
-    refreshed.setdefault("refresh_token", refresh_token)
-    save_tokens(refreshed)
-    record_refresh_success()
-    return refreshed
+        if not response.ok:
+            try:
+                payload = response.json()
+            except (TypeError, ValueError):
+                payload = None
+            error_name = _oauth_error_name(payload)
+            if error_name in {"invalid_grant", "invalid_client"}:
+                record_auth_failure(error_name)
+            raise SchwabError(
+                f"Schwab token refresh failed ({response.status_code}): {response.text[:500]}"
+            )
+        try:
+            refreshed = response.json()
+        except (TypeError, ValueError) as exc:
+            raise SchwabError("Schwab token refresh returned invalid JSON") from exc
+        if not isinstance(refreshed, dict) or not refreshed.get("access_token"):
+            raise SchwabError("Schwab token refresh returned malformed token data")
+        refreshed.setdefault("refresh_token", refresh_token)
+        _save_tokens_unlocked(refreshed)
+        record_refresh_success()
+        return refreshed
 
 
 def get_access_token() -> str:
@@ -171,6 +243,12 @@ def get_access_token() -> str:
     saved_at = int(tokens.get("saved_at", 0))
     expires_in = int(tokens.get("expires_in", 1800))
     if time.time() >= saved_at + expires_in - 90:
+        health_state = load_status()
+        if (
+            health_state.get("health") == "reauthorization_required"
+            or authorization_state(health_state)["health"] == "reauthorization_required"
+        ):
+            raise SchwabError("Schwab reauthorization required; run `python -m gex_client.login`")
         tokens = _refresh_tokens(tokens)
     access_token = tokens.get("access_token")
     if not access_token:
