@@ -17,24 +17,6 @@
 
   <main class="page">
     <section class="controls" aria-label="Dashboard controls">
-      <div class="field">
-        <label for="symbol">symbol</label>
-        <select id="symbol">
-          <option value="NDX" selected>NDX</option>
-          <option value="SPX">SPX</option>
-        </select>
-      </div>
-      <div class="field history-field" id="history-field">
-        <label for="history-session">historical session</label>
-        <select id="history-session">
-          <option value="">live</option>
-          <option value="" disabled>no archived sessions yet</option>
-        </select>
-      </div>
-      <div class="field history-time-field" id="history-time-field" hidden>
-        <label for="history-time">snapshot <span id="history-time-label"></span></label>
-        <input id="history-time" type="range" min="0" max="0" value="0">
-      </div>
       <button id="refresh" type="button">refresh</button>
       <div class="status" id="updated">loading local Schwab data…</div>
     </section>
@@ -57,14 +39,193 @@
       <div class="setup-state" id="setup-state"></div>
     </section>
 
-    <section class="chart-card">
-      <div class="chart-title">
-        <span>gamma exposure</span>
-        <span class="mode" id="chart-mode">live · local</span>
+    <section class="ramp-legend" aria-labelledby="ramp-legend-title">
+      <div class="ramp-legend-heading">
+        <span class="section-kicker">Foxchase structure</span>
+        <h2 id="ramp-legend-title">Gamma Ramp</h2>
+        <span class="ramp-legend-note">Reference legend · no additional classification logic</span>
       </div>
-      <div id="pattern-box" class="pattern-box" hidden></div>
-      <div id="gexChart" role="img" aria-label="Gamma exposure by strike"></div>
-      <div class="unit" id="unit">shares per $ move</div>
+      <div class="ramp-items">
+        <div class="ramp-item ramp-neutral">
+          <div class="ramp-item-heading">
+            <span class="ramp-number">0</span>
+            <div><strong>Gamma Pin</strong><small>Flat / concentrated at price</small></div>
+          </div>
+          <svg class="ramp-schematic" viewBox="0 0 160 82" role="img" aria-label="Gamma Pin schematic">
+            <line class="ramp-zero-line" x1="80" y1="7" x2="80" y2="75" />
+            <line class="ramp-price-line" x1="8" y1="41" x2="152" y2="41" />
+            <rect class="ramp-bar-positive" x="80" y="28" width="12" height="5" rx="1" />
+            <rect class="ramp-bar-positive" x="80" y="35" width="72" height="5" rx="1" />
+            <rect class="ramp-bar-negative" x="66" y="43" width="14" height="5" rx="1" />
+            <rect class="ramp-bar-negative" x="70" y="50" width="10" height="5" rx="1" />
+            <circle class="ramp-price-marker" cx="80" cy="41" r="2.5" />
+          </svg>
+        </div>
+        <div class="ramp-item ramp-neutral">
+          <div class="ramp-item-heading">
+            <span class="ramp-number">1</span>
+            <div><strong>Mixed Gamma</strong><small>Opposing concentrations / not aligned</small></div>
+          </div>
+          <svg class="ramp-schematic" viewBox="0 0 160 82" role="img" aria-label="Mixed Gamma schematic">
+            <line class="ramp-zero-line" x1="80" y1="7" x2="80" y2="75" />
+            <line class="ramp-price-line" x1="8" y1="41" x2="152" y2="41" />
+            <rect class="ramp-bar-positive" x="80" y="12" width="42" height="5" rx="1" />
+            <rect class="ramp-bar-positive" x="80" y="22" width="18" height="5" rx="1" />
+            <rect class="ramp-bar-positive" x="80" y="32" width="30" height="5" rx="1" />
+            <rect class="ramp-bar-negative" x="46" y="48" width="34" height="5" rx="1" />
+            <rect class="ramp-bar-negative" x="30" y="59" width="50" height="5" rx="1" />
+          </svg>
+        </div>
+        <div class="ramp-item ramp-positive">
+          <div class="ramp-item-heading">
+            <span class="ramp-number">2</span>
+            <div><strong>Forward Positive Ramp</strong><small>small → bigger → biggest (above price)</small></div>
+          </div>
+          <svg class="ramp-schematic" viewBox="0 0 160 82" role="img" aria-label="Forward Positive Ramp schematic">
+            <line class="ramp-zero-line" x1="80" y1="7" x2="80" y2="75" />
+            <line class="ramp-price-line" x1="8" y1="41" x2="152" y2="41" />
+            <rect class="ramp-bar-positive" x="80" y="29" width="16" height="5" rx="1" />
+            <rect class="ramp-bar-positive" x="80" y="19" width="31" height="5" rx="1" />
+            <rect class="ramp-bar-positive" x="80" y="9" width="52" height="5" rx="1" />
+          </svg>
+        </div>
+        <div class="ramp-item ramp-positive">
+          <div class="ramp-item-heading">
+            <span class="ramp-number">3</span>
+            <div><strong>Backward Positive Ramp</strong><small>big → smaller → smallest (above price)</small></div>
+          </div>
+          <svg class="ramp-schematic" viewBox="0 0 160 82" role="img" aria-label="Backward Positive Ramp schematic">
+            <line class="ramp-zero-line" x1="80" y1="7" x2="80" y2="75" />
+            <line class="ramp-price-line" x1="8" y1="41" x2="152" y2="41" />
+            <rect class="ramp-bar-positive" x="80" y="9" width="16" height="5" rx="1" />
+            <rect class="ramp-bar-positive" x="80" y="19" width="31" height="5" rx="1" />
+            <rect class="ramp-bar-positive" x="80" y="29" width="52" height="5" rx="1" />
+          </svg>
+        </div>
+        <div class="ramp-item ramp-negative">
+          <div class="ramp-item-heading">
+            <span class="ramp-number">4</span>
+            <div><strong>Forward Negative Ramp</strong><small>small → bigger → biggest (below price)</small></div>
+          </div>
+          <svg class="ramp-schematic" viewBox="0 0 160 82" role="img" aria-label="Forward Negative Ramp schematic">
+            <line class="ramp-zero-line" x1="80" y1="7" x2="80" y2="75" />
+            <line class="ramp-price-line" x1="8" y1="41" x2="152" y2="41" />
+            <rect class="ramp-bar-negative" x="64" y="45" width="16" height="5" rx="1" />
+            <rect class="ramp-bar-negative" x="49" y="54" width="31" height="5" rx="1" />
+            <rect class="ramp-bar-negative" x="28" y="63" width="52" height="5" rx="1" />
+          </svg>
+        </div>
+        <div class="ramp-item ramp-negative">
+          <div class="ramp-item-heading">
+            <span class="ramp-number">5</span>
+            <div><strong>Backward Negative Ramp</strong><small>big → smaller → smallest (below price)</small></div>
+          </div>
+          <svg class="ramp-schematic" viewBox="0 0 160 82" role="img" aria-label="Backward Negative Ramp schematic">
+            <line class="ramp-zero-line" x1="80" y1="7" x2="80" y2="75" />
+            <line class="ramp-price-line" x1="8" y1="41" x2="152" y2="41" />
+            <rect class="ramp-bar-negative" x="28" y="45" width="52" height="5" rx="1" />
+            <rect class="ramp-bar-negative" x="49" y="54" width="31" height="5" rx="1" />
+            <rect class="ramp-bar-negative" x="64" y="63" width="16" height="5" rx="1" />
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <section class="chart-grid" aria-label="Gamma exposure charts">
+      <article class="chart-card" data-symbol="NDX">
+        <header class="chart-header">
+          <div class="chart-title">
+            <div class="chart-symbol">NDX</div>
+            <div class="chart-kind">gamma exposure</div>
+          </div>
+          <div class="chart-meta">
+            <span class="mode" id="chart-mode-NDX">live · local</span>
+            <span id="expiration-NDX">expiration · —</span>
+          </div>
+        </header>
+        <div class="chart-controls" aria-label="NDX chart controls">
+          <div class="field">
+            <label for="scale-NDX">GEX Scale</label>
+            <select id="scale-NDX" class="gex-scale" data-symbol="NDX">
+              <option value="auto" selected>Auto</option>
+              <option value="25">±25</option>
+              <option value="35">±35</option>
+              <option value="75">±75</option>
+              <option value="100">±100</option>
+              <option value="200">±200</option>
+              <option value="300">±300</option>
+              <option value="400">±400</option>
+              <option value="500">±500</option>
+              <option value="1000">±1k</option>
+            </select>
+          </div>
+          <div class="field history-field">
+            <label for="history-session-NDX">historical session</label>
+            <select id="history-session-NDX" class="history-session" data-symbol="NDX">
+              <option value="">live</option>
+              <option value="" disabled>no archived sessions yet</option>
+            </select>
+          </div>
+          <div class="field history-time-field" id="history-time-field-NDX" hidden>
+            <label for="history-time-NDX">snapshot <span id="history-time-label-NDX"></span></label>
+            <input id="history-time-NDX" class="history-time" data-symbol="NDX" type="range" min="0" max="0" value="0">
+          </div>
+          <div class="chart-status" id="chart-status-NDX" aria-live="polite">waiting for data…</div>
+        </div>
+        <div class="chart-body">
+          <div id="pattern-box-NDX" class="pattern-box" hidden></div>
+          <div id="gexChart-NDX" role="img" aria-label="NDX gamma exposure by strike"></div>
+          <div class="chart-error" id="chart-error-NDX" hidden></div>
+          <div class="unit" id="unit-NDX">shares per $ move</div>
+        </div>
+      </article>
+
+      <article class="chart-card" data-symbol="SPX">
+        <header class="chart-header">
+          <div class="chart-title">
+            <div class="chart-symbol">SPX</div>
+            <div class="chart-kind">gamma exposure</div>
+          </div>
+          <div class="chart-meta">
+            <span class="mode" id="chart-mode-SPX">live · local</span>
+            <span id="expiration-SPX">expiration · —</span>
+          </div>
+        </header>
+        <div class="chart-controls" aria-label="SPX chart controls">
+          <div class="field">
+            <label for="scale-SPX">GEX Scale</label>
+            <select id="scale-SPX" class="gex-scale" data-symbol="SPX">
+              <option value="auto" selected>Auto</option>
+              <option value="5">±5</option>
+              <option value="10">±10</option>
+              <option value="25">±25</option>
+              <option value="50">±50</option>
+              <option value="75">±75</option>
+              <option value="100">±100</option>
+              <option value="200">±200</option>
+              <option value="300">±300</option>
+            </select>
+          </div>
+          <div class="field history-field">
+            <label for="history-session-SPX">historical session</label>
+            <select id="history-session-SPX" class="history-session" data-symbol="SPX">
+              <option value="">live</option>
+              <option value="" disabled>no archived sessions yet</option>
+            </select>
+          </div>
+          <div class="field history-time-field" id="history-time-field-SPX" hidden>
+            <label for="history-time-SPX">snapshot <span id="history-time-label-SPX"></span></label>
+            <input id="history-time-SPX" class="history-time" data-symbol="SPX" type="range" min="0" max="0" value="0">
+          </div>
+          <div class="chart-status" id="chart-status-SPX" aria-live="polite">waiting for data…</div>
+        </div>
+        <div class="chart-body">
+          <div id="pattern-box-SPX" class="pattern-box" hidden></div>
+          <div id="gexChart-SPX" role="img" aria-label="SPX gamma exposure by strike"></div>
+          <div class="chart-error" id="chart-error-SPX" hidden></div>
+          <div class="unit" id="unit-SPX">shares per $ move</div>
+        </div>
+      </article>
     </section>
   </main>
 
