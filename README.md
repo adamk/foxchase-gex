@@ -77,6 +77,13 @@ python run.py
 
 Open [http://127.0.0.1:8765](http://127.0.0.1:8765). The web server binds only to the loopback interface, so it is not exposed to other devices on your network.
 
+## Production UI source and deployment
+
+The production-compatible three-file UI source and guarded deployment mapping
+are documented in [`deploy/PRODUCTION_UI.md`](deploy/PRODUCTION_UI.md). The
+deployment script requires an exact production UI baseline, creates a
+timestamped rollback backup, and never writes root-level `/SHA256SUMS`.
+
 ## Local historical archive
 
 Set `FOXCHASE_GEX_DATA_DIR` to the directory where computed snapshots should be

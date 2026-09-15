@@ -1,0 +1,21 @@
+{
+  "release_id": "foxchase-gex-production-ui-20260915-density-concise",
+  "source_root": "deploy/production-ui",
+  "service": "foxchase-gex.service",
+  "targets": {
+    "index.html": "/opt/foxchase-gex/static/templates/index.html",
+    "app.js": "/opt/foxchase-gex/static/js/app.js",
+    "style.css": "/opt/foxchase-gex/static/css/style.css"
+  },
+  "sha256": {
+    "index.html": "34c12bc6ea488b4ebca29bb131aca86bc1253c9c0470bdc45eceeea4a4345452",
+    "app.js": "d7a79d6fb89a85f480fccb410eb22172c9cadfdec22ec6c986871c75a81b0b30",
+    "style.css": "5874421a2484cf615284e59ef45df5b78dfbd6a5ec345494bea2e6d7b5487b3c"
+  },
+  "api_checks": [
+    "https://gex.foxchasetrading.com/",
+    "https://gex.foxchasetrading.com/api/gex/NDX",
+    "https://gex.foxchasetrading.com/api/gex/SPX"
+  ],
+  "root_checksum_path": "never write /SHA256SUMS"
+}
