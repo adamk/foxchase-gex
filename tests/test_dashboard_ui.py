@@ -61,6 +61,27 @@ console.log(JSON.stringify({{autoRange, stableRange, expandedRange, fixedRange, 
     assert values["options"]["SPX"][0] == 5
 
 
+def test_dense_ladders_keep_all_bars_and_thin_ticks_by_chart_height():
+    script = SCRIPT.read_text(encoding="utf-8")
+    assert "const GEX_BAR_GAP = 0.08;" in script
+    assert 'tickmode: "array"' in script
+    assert "GEX_LABEL_SPACING_PX = 30" in script
+
+    node_script = f"""
+const {{selectReadableTicks}} = require({json.dumps(str(SCRIPT))});
+for (const [count, height, expected] of [[100, 620, 21], [75, 620, 20], [40, 620, 21], [20, 620, 20], [100, 300, 11]]) {{
+  const strikes = Array.from({{length: count}}, (_, index) => 1000 + index);
+  const result = selectReadableTicks(strikes, height);
+  if (result.values.length !== expected) process.exit(1);
+  if (result.values[0] !== strikes[0]) process.exit(2);
+  if (result.values[result.values.length - 1] !== strikes[strikes.length - 1]) process.exit(3);
+  if (result.labels.length !== result.values.length) process.exit(4);
+}}
+"""
+    result = subprocess.run(["node", "-e", node_script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
 def test_forward_and_backward_positive_ramps_are_visual_opposites():
     html = TEMPLATE.read_text(encoding="utf-8")
 

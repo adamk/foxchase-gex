@@ -6,6 +6,8 @@ const SCALE_OPTIONS = Object.freeze({
   NDX: Object.freeze([25, 35, 75, 100, 200, 300, 400, 500, 1000]),
   SPX: Object.freeze([5, 10, 25, 50, 75, 100, 200, 300])
 });
+const GEX_BAR_GAP = 0.08;
+const GEX_LABEL_SPACING_PX = 30;
 
 const $ = id => document.getElementById(id);
 let sessionId = "";
@@ -57,6 +59,55 @@ function resolveScaleRange(data, state) {
   return [-edge, edge];
 }
 
+function formatStrikeTick(value) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return "";
+  return number.toLocaleString("en-US", {
+    maximumFractionDigits: Number.isInteger(number) ? 0 : 2
+  });
+}
+
+function selectReadableTicks(strikes, chartHeight) {
+  const values = (Array.isArray(strikes) ? strikes : [])
+    .map(Number)
+    .filter(Number.isFinite);
+  if (!values.length) return {values: [], labels: [], step: 1};
+
+  const measuredHeight = Number(chartHeight);
+  const usableHeight = Number.isFinite(measuredHeight) && measuredHeight > 0
+    ? Math.max(240, measuredHeight)
+    : 620;
+  const maxLabels = Math.max(2, Math.floor(usableHeight / GEX_LABEL_SPACING_PX));
+  const step = Math.max(1, Math.ceil(values.length / maxLabels));
+  const indices = [];
+
+  for (let index = 0; index < values.length; index += step) indices.push(index);
+  if (indices[indices.length - 1] !== values.length - 1) {
+    indices.push(values.length - 1);
+  }
+
+  return {
+    values: indices.map(index => values[index]),
+    labels: indices.map(index => formatStrikeTick(values[index])),
+    step
+  };
+}
+
+function chartHeightPixels() {
+  const chart = $("gexChart");
+  const directHeight = Number(chart?.clientHeight);
+  if (Number.isFinite(directHeight) && directHeight > 0) return directHeight;
+
+  const measuredHeight = Number(chart?.getBoundingClientRect?.().height);
+  if (Number.isFinite(measuredHeight) && measuredHeight > 0) return measuredHeight;
+
+  const card = chart?.closest?.(".chart-card");
+  const cardHeight = Number(card?.clientHeight);
+  if (Number.isFinite(cardHeight) && cardHeight > 0) return Math.max(240, cardHeight - 138);
+
+  return 620;
+}
+
 function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>'"]/g, character => ({
     "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;"
@@ -103,6 +154,7 @@ function renderChart(data, state) {
   const positive = rows.map(row => Number(row.gex) > 0 ? Number(row.gex) : 0);
   const negative = rows.map(row => Number(row.gex) < 0 ? Number(row.gex) : 0);
   const range = resolveScaleRange({strikes: rows}, state);
+  const tickSelection = selectReadableTicks(strikes, chartHeightPixels());
   const spot = Number(data.spot);
 
   const traces = [
@@ -135,14 +187,14 @@ function renderChart(data, state) {
     paper_bgcolor: "#2b2b2b", plot_bgcolor: "#2b2b2b",
     font: {color: "#e8e8e8", size: 12},
     margin: {l: 72, r: 94, t: 18, b: 34},
-    barmode: "overlay", bargap: .28, showlegend: false,
+    barmode: "overlay", bargap: GEX_BAR_GAP, showlegend: false,
     xaxis: {
       range, autorange: false, zeroline: true, zerolinecolor: "#777", zerolinewidth: 1,
       gridcolor: "#3d3d3d", tickfont: {color: "#f0f0f0", size: 10}
     },
     yaxis: {
-      tickmode: "linear", dtick: state.symbol === "NDX" ? 10 : 5,
-      tickformat: ".0f", separatethousands: false,
+      tickmode: "array", tickvals: tickSelection.values, ticktext: tickSelection.labels,
+      separatethousands: false,
       gridcolor: "#303030", tickfont: {color: "#f0f0f0", size: 10}
     },
     shapes,
@@ -427,7 +479,7 @@ function boot() {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = {CHART_SYMBOLS, SCALE_OPTIONS, resolveScaleRange};
+  module.exports = {CHART_SYMBOLS, SCALE_OPTIONS, resolveScaleRange, selectReadableTicks};
 }
 
 if (typeof document !== "undefined") boot();
