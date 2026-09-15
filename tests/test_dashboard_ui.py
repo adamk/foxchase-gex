@@ -82,6 +82,15 @@ for (const [count, height, expected] of [[100, 620, 21], [75, 620, 20], [40, 620
     assert result.returncode == 0, result.stderr
 
 
+def test_foxchase_read_is_concise_and_preserves_classification_tags():
+    script = SCRIPT.read_text(encoding="utf-8")
+    assert "pattern.action_read || pattern.summary" in script
+    assert "pattern.key_read" not in script
+    assert '<div class="pattern-key">' not in script
+    assert "pattern-signals" in script
+    assert "signal.type" in script
+
+
 def test_forward_and_backward_positive_ramps_are_visual_opposites():
     html = TEMPLATE.read_text(encoding="utf-8")
 

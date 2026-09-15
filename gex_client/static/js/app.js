@@ -141,7 +141,6 @@ function renderPattern(data, state) {
     <div class="pattern-kicker">Foxchase Read</div>
     <div class="pattern-primary">${escapeHtml(pattern.read_title || pattern.primary)}</div>
     <div class="pattern-summary">${escapeHtml(pattern.action_read || pattern.summary)}</div>
-    <div class="pattern-key">${escapeHtml(pattern.key_read || "")}</div>
     <div class="pattern-signals">${signals}</div>`;
   box.hidden = false;
 }
