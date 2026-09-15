@@ -23,7 +23,7 @@ def test_production_ui_source_manifest_matches_files():
 
 
 def test_production_ui_source_has_reviewed_final_hashes():
-    assert sha256(PRODUCTION_UI / "index.html") == "34c12bc6ea488b4ebca29bb131aca86bc1253c9c0470bdc45eceeea4a4345452"
+    assert sha256(PRODUCTION_UI / "index.html") == "3de9611d6f75357fca83485f6ed87c3c16c4f4c63606fc9262eca046dd643baa"
     assert sha256(PRODUCTION_UI / "app.js") == "d7a79d6fb89a85f480fccb410eb22172c9cadfdec22ec6c986871c75a81b0b30"
     assert sha256(PRODUCTION_UI / "style.css") == "5874421a2484cf615284e59ef45df5b78dfbd6a5ec345494bea2e6d7b5487b3c"
 
@@ -45,7 +45,9 @@ def test_deployment_dry_run_is_read_only_and_maps_only_three_files():
 
 
 def test_production_ui_preserves_final_density_and_concise_read():
+    template = (PRODUCTION_UI / "index.html").read_text(encoding="utf-8")
     script = (PRODUCTION_UI / "app.js").read_text(encoding="utf-8")
+    assert "no additional classification logic" not in template
     assert "const GEX_BAR_GAP = 0.08;" in script
     assert 'tickmode: "array"' in script
     assert "pattern.action_read || pattern.summary" in script

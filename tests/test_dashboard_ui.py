@@ -25,6 +25,7 @@ def test_dashboard_renders_ndx_then_spx_with_independent_controls():
     assert html.count('class="ramp-schematic"') == 6
     assert 'aria-label="Gamma Pin schematic"' in html
     assert 'aria-label="Backward Negative Ramp schematic"' in html
+    assert "no additional classification logic" not in html
 
 
 def test_dashboard_css_has_wide_grid_and_stacked_breakpoint():
