@@ -10,6 +10,18 @@ const SCALE_OPTIONS = Object.freeze({
 
 const GEX_BAR_GAP = 0.08;
 const GEX_LABEL_SPACING_PX = 30;
+const CLASSIFICATION_TONE_CLASSES = Object.freeze({
+  "gamma pin": "chart-classification--gamma-pin",
+  "mixed gamma": "chart-classification--mixed",
+  "forward positive ramp": "chart-classification--positive",
+  "backward positive ramp": "chart-classification--positive",
+  "forward negative ramp": "chart-classification--negative",
+  "backward negative ramp": "chart-classification--negative"
+});
+const CLASSIFICATION_CLASSES = Object.freeze([
+  "chart-classification--neutral",
+  ...new Set(Object.values(CLASSIFICATION_TONE_CLASSES))
+]);
 
 const $ = id => document.getElementById(id);
 
@@ -108,16 +120,6 @@ function chartHeightPixels(symbol) {
   return 620;
 }
 
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>'"]/g, character => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "'": "&#39;",
-    '"': "&quot;"
-  })[character]);
-}
-
 function showError(message = "") {
   const box = $("error");
   box.textContent = message;
@@ -130,25 +132,33 @@ function showChartError(state, message = "") {
   box.hidden = !message;
 }
 
-function renderPattern(data, state) {
-  const box = $(`pattern-box-${state.symbol}`);
-  const pattern = data.patterns;
-  if (!pattern) {
-    box.hidden = true;
-    box.innerHTML = "";
-    return;
-  }
+function clearClassification(symbol) {
+  const badge = $(`classification-${symbol}`);
+  if (!badge) return;
+  badge.textContent = "";
+  badge.hidden = true;
+  badge.classList.remove(...CLASSIFICATION_CLASSES);
+  badge.classList.add("chart-classification--neutral");
+}
 
-  const signals = (pattern.signals || []).slice(0, 3).map(signal =>
-    `<span>• ${escapeHtml(signal.type)}</span>`
-  ).join("");
+function classificationToneClass(primary) {
+  const key = typeof primary === "string"
+    ? primary.trim().toLowerCase()
+    : "";
+  return CLASSIFICATION_TONE_CLASSES[key] || "chart-classification--neutral";
+}
 
-  box.innerHTML = `
-    <div class="pattern-kicker">Foxchase Read</div>
-    <div class="pattern-primary">${escapeHtml(pattern.read_title || pattern.primary)}</div>
-    <div class="pattern-summary">${escapeHtml(pattern.action_read || pattern.summary)}</div>
-    <div class="pattern-signals">${signals}</div>`;
-  box.hidden = false;
+function renderClassification(data, state) {
+  clearClassification(state.symbol);
+  const badge = $(`classification-${state.symbol}`);
+  const primary = typeof data?.patterns?.primary === "string"
+    ? data.patterns.primary.trim()
+    : "";
+  if (!badge || !primary) return;
+  badge.textContent = primary;
+  badge.classList.remove("chart-classification--neutral");
+  badge.classList.add(classificationToneClass(primary));
+  badge.hidden = false;
 }
 
 function renderChart(data, state) {
@@ -273,7 +283,7 @@ function formatAge(value) {
 
 function renderResult(data, state) {
   state.data = data;
-  renderPattern(data, state);
+  renderClassification(data, state);
   renderChart(data, state);
 
   const displaySymbol = data.display_symbol || state.symbol;
@@ -305,6 +315,7 @@ async function loadGex(state) {
     }
     renderResult(data, state);
   } catch (error) {
+    clearClassification(state.symbol);
     showChartError(state, error.message || "GEX request failed");
     $(`chart-status-${state.symbol}`).textContent = "not connected";
     showError(`${state.symbol}: ${error.message || "GEX request failed"}`);
@@ -374,6 +385,10 @@ if (typeof module !== "undefined" && module.exports) {
     SCALE_OPTIONS,
     resolveScaleRange,
     selectReadableTicks,
-    readScale
+    readScale,
+    clearClassification,
+    classificationToneClass,
+    renderClassification,
+    loadGex
   };
 }

@@ -1,5 +1,5 @@
 {
-  "release_id": "foxchase-gex-production-ui-20260915-density-concise",
+  "release_id": "foxchase-gex-production-ui-20260916-header-classification-colors",
   "source_root": "deploy/production-ui",
   "service": "foxchase-gex.service",
   "targets": {
@@ -8,9 +8,9 @@
     "style.css": "/opt/foxchase-gex/static/css/style.css"
   },
   "sha256": {
-    "index.html": "34c12bc6ea488b4ebca29bb131aca86bc1253c9c0470bdc45eceeea4a4345452",
-    "app.js": "d7a79d6fb89a85f480fccb410eb22172c9cadfdec22ec6c986871c75a81b0b30",
-    "style.css": "5874421a2484cf615284e59ef45df5b78dfbd6a5ec345494bea2e6d7b5487b3c"
+    "index.html": "a32a780ac1d39a164ecc1fdae340d790ef08b3c13ee59d8cfe6d82ab22767895",
+    "app.js": "9b1c6c7ceeb723ece0cb2f875c9e522f112c08f3136fd05addc6356b4622a89c",
+    "style.css": "6d478c440a151e7b0b186e66164c2ad02ae8203c8b01beaf76a77e764e0559f2"
   },
   "api_checks": [
     "https://gex.foxchasetrading.com/",
