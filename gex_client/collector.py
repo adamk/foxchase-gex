@@ -15,7 +15,8 @@ import requests
 from gex_client.archive import archive_snapshot, verify_archive_mount
 from gex_client.auth_health import (
     authorization_state, emit_due_alert, emit_recovery_if_pending, load_status,
-    mark_alert_sent, send_dashboard_alert, send_dashboard_status,
+    mark_alert_sent, record_authenticated_success, send_dashboard_alert,
+    send_dashboard_status,
 )
 from gex_client.forward_audit import archive_forward_audit
 from gex_client.health import record_attempt
@@ -83,6 +84,13 @@ def collect_once(base_url: str, symbol: str, session_id: str) -> None:
         "0", "false", "no", "off",
     }:
         archive_forward_audit(symbol, result)
+    try:
+        record_authenticated_success()
+        send_dashboard_status(True)
+    except Exception as exc:
+        # Auth-status publication is advisory; never turn a successful GEX
+        # collection into a failed collection because its status sink is down.
+        print(f"{datetime.now(NY).isoformat(timespec='seconds')} auth status sync failed: {type(exc).__name__}", flush=True)
 
 
 def main() -> None:

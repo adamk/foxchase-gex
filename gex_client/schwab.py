@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 
 from gex_client.auth_health import (
     record_auth_failure,
-    record_interactive_authorization,
+    record_pending_interactive_authorization,
     record_refresh_success,
 )
 
@@ -128,7 +128,9 @@ def exchange_authorization_response(value: str) -> dict:
         )
     tokens = response.json()
     save_tokens(tokens)
-    record_interactive_authorization()
+    # Token exchange is not API validation. The collector promotes this
+    # pending authorization only after a successful authenticated GEX call.
+    record_pending_interactive_authorization()
     return tokens
 
 

@@ -1,0 +1,21 @@
+{
+  "release_id": "foxchase-gex-production-ui-20260916-header-classification-colors",
+  "source_root": "deploy/production-ui",
+  "service": "foxchase-gex.service",
+  "targets": {
+    "index.html": "/opt/foxchase-gex/static/templates/index.html",
+    "app.js": "/opt/foxchase-gex/static/js/app.js",
+    "style.css": "/opt/foxchase-gex/static/css/style.css"
+  },
+  "sha256": {
+    "index.html": "a32a780ac1d39a164ecc1fdae340d790ef08b3c13ee59d8cfe6d82ab22767895",
+    "app.js": "9b1c6c7ceeb723ece0cb2f875c9e522f112c08f3136fd05addc6356b4622a89c",
+    "style.css": "6d478c440a151e7b0b186e66164c2ad02ae8203c8b01beaf76a77e764e0559f2"
+  },
+  "api_checks": [
+    "https://gex.foxchasetrading.com/",
+    "https://gex.foxchasetrading.com/api/gex/NDX",
+    "https://gex.foxchasetrading.com/api/gex/SPX"
+  ],
+  "root_checksum_path": "never write /SHA256SUMS"
+}

@@ -71,10 +71,16 @@ def test_collector_archives_computed_result_without_transient_fields(monkeypatch
                                   "open_interest":100,"gamma":.004,
                                   "volatility":.18,"multiplier":100}]}
     monkeypatch.setattr("gex_client.collector.fetch_sanitized_snapshot", lambda symbol: causal_input)
+    authenticated = []
+    monkeypatch.setattr(
+        "gex_client.collector.record_authenticated_success",
+        lambda: authenticated.append(True),
+    )
     monkeypatch.setattr("gex_client.collector.requests.post", fake_post)
     collect_once("http://127.0.0.1:8765", "SPX", "collector-spx")
 
     saved = snapshot("SPX", datetime.now(NY).date().isoformat(), 0)
+    assert authenticated == [True]
     assert captured_headers["X-GEX-Session"] == "collector-spx"
     assert "online" not in saved
     assert "client_cached" not in saved

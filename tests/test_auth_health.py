@@ -1,4 +1,5 @@
 import json
+import time
 from datetime import datetime, timezone
 
 from gex_client import auth_health
@@ -11,6 +12,7 @@ def epoch(value: str) -> float:
 
 def configure(monkeypatch, tmp_path):
     monkeypatch.setenv("SCHWAB_AUTH_HEALTH_PATH", str(tmp_path / "health.json"))
+    monkeypatch.setenv("SCHWAB_TOKEN_PATH", str(tmp_path / "tokens.json"))
 
 
 def test_healthy_and_warning_windows(monkeypatch, tmp_path):
@@ -30,6 +32,64 @@ def test_refresh_does_not_extend_interactive_deadline(monkeypatch, tmp_path):
     refreshed = auth_health.record_refresh_success(start + 3 * 86400)
     assert refreshed["interactive_authorized_at"] == original["interactive_authorized_at"]
     assert refreshed["reauthorization_due_at"] == original["reauthorization_due_at"]
+
+
+def test_validated_authenticated_request_clears_latched_failure(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    start = epoch("2026-08-31T12:00:00")
+    auth_health.record_interactive_authorization(start)
+    auth_health.record_auth_failure("invalid_grant", start + 3600)
+
+    recovered = auth_health.record_authenticated_success(start + 7200)
+
+    assert recovered["health"] == "healthy"
+    assert recovered["last_failure_class"] is None
+    assert recovered["recovery_pending"] is True
+    assert auth_health.authorization_state(recovered, start + 7200)["health"] == "healthy"
+
+
+def test_repeated_auth_failures_remain_required(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    first = epoch("2026-08-31T12:00:00")
+    auth_health.record_auth_failure("invalid_grant", first)
+    auth_health.record_auth_failure("timeout", first + 60)
+    state = auth_health.load_status()
+    assert state["health"] == "reauthorization_required"
+    assert state["failure_detected_at"] == auth_health._iso(first)
+
+
+def test_oauth_exchange_waits_for_authenticated_validation(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    monkeypatch.setenv("SCHWAB_CLIENT_ID", "client")
+    monkeypatch.setenv("SCHWAB_CLIENT_SECRET", "secret")
+    auth_health.record_auth_failure("invalid_grant", 1000)
+
+    class Response:
+        ok = True
+        status_code = 200
+        text = "ok"
+        def json(self):
+            return {"access_token": "new-access", "refresh_token": "new-refresh", "expires_in": 1800}
+
+    monkeypatch.setattr(schwab.requests, "post", lambda *a, **k: Response())
+    schwab.exchange_authorization_response("authorization-code")
+    pending = auth_health.load_status()
+    assert pending["health"] == "reauthorization_required"
+    assert "pending_interactive_authorized_at" in pending
+    assert auth_health.record_authenticated_success(1100)["health"] == "healthy"
+
+
+def test_validated_request_does_not_bypass_expired_interactive_deadline(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    start = epoch("2026-08-31T12:00:00")
+    auth_health.record_interactive_authorization(start)
+    auth_health.record_auth_failure("invalid_grant", start + 8 * 86400)
+
+    recovered = auth_health.record_authenticated_success(start + 8 * 86400 + 1)
+
+    assert recovered["health"] == "reauthorization_required"
+    assert recovered["last_failure_class"] is None
+    assert "recovery_pending" not in recovered
 
 
 def test_invalid_grant_marks_required_without_secret(monkeypatch, tmp_path):
@@ -78,7 +138,7 @@ def test_successful_refresh_rotation_and_no_token_in_metadata(monkeypatch, tmp_p
     monkeypatch.setenv("SCHWAB_TOKEN_PATH", str(tmp_path / "tokens.json"))
     monkeypatch.setenv("SCHWAB_CLIENT_ID", "client")
     monkeypatch.setenv("SCHWAB_CLIENT_SECRET", "secret")
-    auth_health.record_interactive_authorization(1000)
+    auth_health.record_interactive_authorization(time.time())
     class Response:
         ok = True
         status_code = 200

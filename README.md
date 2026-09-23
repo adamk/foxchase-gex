@@ -36,7 +36,7 @@ Schwab may change the portal labels. The callback URL in the portal and `.env` m
 
 ## 2. Install Foxchase Trading GEX
 
-Python 3.10 or newer is recommended.
+Python 3.9 or newer is required.
 
 ```bash
 git clone https://github.com/adamk/foxchase-gex.git
@@ -76,6 +76,41 @@ python run.py
 ```
 
 Open [http://127.0.0.1:8765](http://127.0.0.1:8765). The web server binds only to the loopback interface, so it is not exposed to other devices on your network.
+
+## Local historical archive
+
+Set `FOXCHASE_GEX_DATA_DIR` to the directory where computed snapshots should be
+stored. The dashboard automatically shows the historical-session controls once
+that directory contains archived sessions. `FOXCHASE_GEX_REQUIRED_MOUNT` can be
+set to a mounted drive root; the collector then refuses to write when that drive
+is unavailable, preventing data from falling back to the system disk.
+
+Run the dashboard continuously, then start the headless collector:
+
+```bash
+export FOXCHASE_GEX_DATA_DIR=/mnt/t7/foxchase-gex/archive
+export FOXCHASE_GEX_REQUIRED_MOUNT=/mnt/t7
+python -m gex_client.collector
+```
+
+The default interval is 60 seconds for SPX and NDX from 09:30 through 16:00 ET
+on weekdays. Set `FOXCHASE_GEX_CAPTURE_SECONDS` to a value of 30 or greater to
+change it. The archive contains computed GEX results only, not Schwab credentials,
+OAuth tokens, account data, or raw option chains.
+
+### Shadow strategy audit
+
+Each successful collector snapshot also appends a shadow-only structural audit
+under `FOXCHASE_GEX_DATA_DIR/audit/SPX/YYYY-MM-DD.jsonl`. The record preserves
+net gamma, the modeled zero-gamma flip, call/put walls and strength, imbalance,
+wall migration, and provisional bull-put, call-credit, and iron-condor
+allow/block labels. These labels are research observations only: they never
+connect to a broker and cannot place, resize, or close a trade. Raw features are
+kept alongside every label so thresholds can be re-scored later without
+recollecting the market data.
+
+Set `FOXCHASE_GEX_FORWARD_AUDIT=0` to disable the derived audit while retaining
+the ordinary GEX snapshot archive.
 
 ## Test
 

@@ -1,52 +1,37 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Foxchase GEX</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+  <meta charset="UTF-8" />
+  <title>Foxchase GEX Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+  <link rel="stylesheet" href="/static/css/style.css?v=dual-index-v1" />
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+  <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
 </head>
+
 <body>
   <header class="topbar">
-    <div class="brand"><span>foxchase</span><strong>gex</strong></div>
-    <div class="presence" aria-live="polite">
-      <i></i> Active sessions: <span id="active-sessions">0</span>
+    <div class="brand">
+      <span class="brand-main">foxchase</span><span class="brand-sub">gex</span>
     </div>
   </header>
 
   <main class="page">
     <section class="controls" aria-label="Dashboard controls">
       <button id="refresh" type="button">refresh</button>
-      <div class="status" id="updated">loading local Schwab data…</div>
+      <div class="status" id="updated" aria-live="polite">loading...</div>
     </section>
 
     <div class="error" id="error" hidden></div>
-
-    <section class="setup-card" id="setup-card" hidden>
-      <div>
-        <div class="setup-kicker">One-time setup</div>
-        <h2>Connect your Schwab developer app</h2>
-        <p>Your app credentials and OAuth token stay on this computer. They are never sent to Foxchase Trading.</p>
-      </div>
-      <ol>
-        <li>Create an Individual Developer app at <a href="https://developer.schwab.com/" target="_blank" rel="noopener">developer.schwab.com</a> with <strong>Market Data Production</strong>.</li>
-        <li>Set its callback URL to exactly <code>https://127.0.0.1</code> and wait for <strong>Ready for use</strong>.</li>
-        <li>Copy <code>.env.example</code> to <code>.env</code>, then add the app key and secret.</li>
-        <li>Run <code>python -m gex_client.login</code>, authorize Schwab, and paste the full redirect URL.</li>
-        <li>Run <code>python run.py</code> again.</li>
-      </ol>
-      <div class="setup-state" id="setup-state"></div>
-    </section>
 
     <section class="ramp-legend" aria-labelledby="ramp-legend-title">
       <div class="ramp-legend-heading">
         <span class="section-kicker">Foxchase structure</span>
         <h2 id="ramp-legend-title">Gamma Ramp</h2>
-        <span class="ramp-legend-note">Active badges identify the index · NDX or SPX</span>
       </div>
       <div class="ramp-items">
-        <div class="ramp-item ramp-neutral" data-category="gamma-pin">
+        <div class="ramp-item ramp-neutral">
           <div class="ramp-item-heading">
             <span class="ramp-number">0</span>
             <div><strong>Gamma Pin</strong><small>Flat / concentrated at price</small></div>
@@ -60,12 +45,9 @@
             <rect class="ramp-bar-negative" x="70" y="50" width="10" height="5" rx="1" />
             <circle class="ramp-price-marker" cx="80" cy="41" r="2.5" />
           </svg>
-          <div class="ramp-active-state" aria-label="Active index">
-            <span class="ramp-active-chip" data-symbol="NDX" hidden>NDX</span>
-            <span class="ramp-active-chip" data-symbol="SPX" hidden>SPX</span>
-          </div>
         </div>
-        <div class="ramp-item ramp-neutral" data-category="mixed-gamma">
+
+        <div class="ramp-item ramp-neutral">
           <div class="ramp-item-heading">
             <span class="ramp-number">1</span>
             <div><strong>Mixed Gamma</strong><small>Opposing concentrations / not aligned</small></div>
@@ -79,12 +61,9 @@
             <rect class="ramp-bar-negative" x="46" y="48" width="34" height="5" rx="1" />
             <rect class="ramp-bar-negative" x="30" y="59" width="50" height="5" rx="1" />
           </svg>
-          <div class="ramp-active-state" aria-label="Active index">
-            <span class="ramp-active-chip" data-symbol="NDX" hidden>NDX</span>
-            <span class="ramp-active-chip" data-symbol="SPX" hidden>SPX</span>
-          </div>
         </div>
-        <div class="ramp-item ramp-positive" data-category="forward-positive-ramp">
+
+        <div class="ramp-item ramp-positive">
           <div class="ramp-item-heading">
             <span class="ramp-number">2</span>
             <div><strong>Forward Positive Ramp</strong><small>small → bigger → biggest (above price)</small></div>
@@ -96,12 +75,9 @@
             <rect class="ramp-bar-positive" x="80" y="19" width="31" height="5" rx="1" />
             <rect class="ramp-bar-positive" x="80" y="9" width="52" height="5" rx="1" />
           </svg>
-          <div class="ramp-active-state" aria-label="Active index">
-            <span class="ramp-active-chip" data-symbol="NDX" hidden>NDX</span>
-            <span class="ramp-active-chip" data-symbol="SPX" hidden>SPX</span>
-          </div>
         </div>
-        <div class="ramp-item ramp-positive" data-category="backward-positive-ramp">
+
+        <div class="ramp-item ramp-positive">
           <div class="ramp-item-heading">
             <span class="ramp-number">3</span>
             <div><strong>Backward Positive Ramp</strong><small>big → smaller → smallest (above price)</small></div>
@@ -113,12 +89,9 @@
             <rect class="ramp-bar-positive" x="80" y="19" width="31" height="5" rx="1" />
             <rect class="ramp-bar-positive" x="80" y="29" width="52" height="5" rx="1" />
           </svg>
-          <div class="ramp-active-state" aria-label="Active index">
-            <span class="ramp-active-chip" data-symbol="NDX" hidden>NDX</span>
-            <span class="ramp-active-chip" data-symbol="SPX" hidden>SPX</span>
-          </div>
         </div>
-        <div class="ramp-item ramp-negative" data-category="forward-negative-ramp">
+
+        <div class="ramp-item ramp-negative">
           <div class="ramp-item-heading">
             <span class="ramp-number">4</span>
             <div><strong>Forward Negative Ramp</strong><small>small → bigger → biggest (below price)</small></div>
@@ -130,12 +103,9 @@
             <rect class="ramp-bar-negative" x="49" y="54" width="31" height="5" rx="1" />
             <rect class="ramp-bar-negative" x="28" y="63" width="52" height="5" rx="1" />
           </svg>
-          <div class="ramp-active-state" aria-label="Active index">
-            <span class="ramp-active-chip" data-symbol="NDX" hidden>NDX</span>
-            <span class="ramp-active-chip" data-symbol="SPX" hidden>SPX</span>
-          </div>
         </div>
-        <div class="ramp-item ramp-negative" data-category="backward-negative-ramp">
+
+        <div class="ramp-item ramp-negative">
           <div class="ramp-item-heading">
             <span class="ramp-number">5</span>
             <div><strong>Backward Negative Ramp</strong><small>big → smaller → smallest (below price)</small></div>
@@ -147,10 +117,6 @@
             <rect class="ramp-bar-negative" x="49" y="54" width="31" height="5" rx="1" />
             <rect class="ramp-bar-negative" x="64" y="63" width="16" height="5" rx="1" />
           </svg>
-          <div class="ramp-active-state" aria-label="Active index">
-            <span class="ramp-active-chip" data-symbol="NDX" hidden>NDX</span>
-            <span class="ramp-active-chip" data-symbol="SPX" hidden>SPX</span>
-          </div>
         </div>
       </div>
     </section>
@@ -159,11 +125,14 @@
       <article class="chart-card" data-symbol="NDX">
         <header class="chart-header">
           <div class="chart-title">
-            <div class="chart-symbol">NDX</div>
+            <div class="chart-heading-row">
+              <div class="chart-symbol">NDX</div>
+              <span class="chart-classification" id="classification-NDX" hidden></span>
+            </div>
             <div class="chart-kind">gamma exposure</div>
           </div>
           <div class="chart-meta">
-            <span class="mode" id="chart-mode-NDX">live · local</span>
+            <span class="mode" id="chart-mode-NDX">live</span>
             <span id="expiration-NDX">expiration · —</span>
           </div>
         </header>
@@ -174,26 +143,16 @@
               <option value="auto" selected>Auto</option>
               <option value="25">±25</option>
               <option value="35">±35</option>
+              <option value="45">±45</option>
               <option value="75">±75</option>
               <option value="100">±100</option>
               <option value="200">±200</option>
               <option value="300">±300</option>
               <option value="400">±400</option>
               <option value="500">±500</option>
-              <option value="1000">±1k</option>
             </select>
           </div>
-          <div class="field history-field">
-            <label for="history-session-NDX">historical session</label>
-            <select id="history-session-NDX" class="history-session" data-symbol="NDX">
-              <option value="">live</option>
-              <option value="" disabled>no archived sessions yet</option>
-            </select>
-          </div>
-          <div class="field history-time-field" id="history-time-field-NDX" hidden>
-            <label for="history-time-NDX">snapshot <span id="history-time-label-NDX"></span></label>
-            <input id="history-time-NDX" class="history-time" data-symbol="NDX" type="range" min="0" max="0" value="0">
-          </div>
+          <div class="chart-source" id="source-NDX">source · —</div>
           <div class="chart-status" id="chart-status-NDX" aria-live="polite">waiting for data…</div>
         </div>
         <div class="chart-body">
@@ -206,11 +165,14 @@
       <article class="chart-card" data-symbol="SPX">
         <header class="chart-header">
           <div class="chart-title">
-            <div class="chart-symbol">SPX</div>
+            <div class="chart-heading-row">
+              <div class="chart-symbol">SPX</div>
+              <span class="chart-classification" id="classification-SPX" hidden></span>
+            </div>
             <div class="chart-kind">gamma exposure</div>
           </div>
           <div class="chart-meta">
-            <span class="mode" id="chart-mode-SPX">live · local</span>
+            <span class="mode" id="chart-mode-SPX">live</span>
             <span id="expiration-SPX">expiration · —</span>
           </div>
         </header>
@@ -219,9 +181,9 @@
             <label for="scale-SPX">GEX Scale</label>
             <select id="scale-SPX" class="gex-scale" data-symbol="SPX">
               <option value="auto" selected>Auto</option>
-              <option value="5">±5</option>
               <option value="10">±10</option>
-              <option value="25">±25</option>
+              <option value="20">±20</option>
+              <option value="30">±30</option>
               <option value="50">±50</option>
               <option value="75">±75</option>
               <option value="100">±100</option>
@@ -229,17 +191,7 @@
               <option value="300">±300</option>
             </select>
           </div>
-          <div class="field history-field">
-            <label for="history-session-SPX">historical session</label>
-            <select id="history-session-SPX" class="history-session" data-symbol="SPX">
-              <option value="">live</option>
-              <option value="" disabled>no archived sessions yet</option>
-            </select>
-          </div>
-          <div class="field history-time-field" id="history-time-field-SPX" hidden>
-            <label for="history-time-SPX">snapshot <span id="history-time-label-SPX"></span></label>
-            <input id="history-time-SPX" class="history-time" data-symbol="SPX" type="range" min="0" max="0" value="0">
-          </div>
+          <div class="chart-source" id="source-SPX">source · —</div>
           <div class="chart-status" id="chart-status-SPX" aria-live="polite">waiting for data…</div>
         </div>
         <div class="chart-body">
@@ -251,6 +203,6 @@
     </section>
   </main>
 
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=dual-index-v1"></script>
 </body>
 </html>
