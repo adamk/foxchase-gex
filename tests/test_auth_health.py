@@ -298,3 +298,85 @@ def test_dashboard_status_is_sanitized(monkeypatch, tmp_path):
     encoded = json.dumps(captured["payload"])
     assert set(captured["payload"]) == {"state", "authorization_due_at", "last_check_at", "collector_available"}
     assert "private-token" not in encoded
+
+
+def test_validated_authenticated_request_clears_latched_failure(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    start = epoch("2026-08-31T12:00:00")
+    auth_health.record_interactive_authorization(start)
+    auth_health.record_auth_failure("invalid_grant", start + 3600)
+
+    recovered = auth_health.record_authenticated_success(start + 7200)
+
+    assert recovered["health"] == "healthy"
+    assert recovered["last_failure_class"] is None
+    assert recovered["recovery_pending"] is True
+    assert auth_health.authorization_state(recovered, start + 7200)["health"] == "healthy"
+
+
+def test_repeated_auth_failures_remain_required(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    first = epoch("2026-08-31T12:00:00")
+    auth_health.record_auth_failure("invalid_grant", first)
+    auth_health.record_auth_failure("timeout", first + 60)
+    state = auth_health.load_status()
+    assert state["health"] == "reauthorization_required"
+    assert state["failure_detected_at"] == auth_health._iso(first)
+
+
+def test_oauth_exchange_waits_for_authenticated_validation(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    monkeypatch.setattr(auth_health.time, "time", lambda: 1050)
+    monkeypatch.setenv("SCHWAB_CLIENT_ID", "client")
+    monkeypatch.setenv("SCHWAB_CLIENT_SECRET", "secret")
+    auth_health.record_auth_failure("invalid_grant", 1000)
+
+    class Response:
+        ok = True
+        status_code = 200
+        text = "ok"
+        def json(self):
+            return {"access_token": "new-access", "refresh_token": "new-refresh", "expires_in": 1800}
+
+    monkeypatch.setattr(schwab.requests, "post", lambda *a, **k: Response())
+    schwab.exchange_authorization_response("authorization-code")
+    pending = auth_health.load_status()
+    assert pending["health"] == "reauthorization_required"
+    assert "pending_interactive_authorized_at" in pending
+    assert auth_health.record_authenticated_success(1100)["health"] == "healthy"
+
+
+def test_validated_request_does_not_bypass_expired_interactive_deadline(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    start = epoch("2026-08-31T12:00:00")
+    auth_health.record_interactive_authorization(start)
+    auth_health.record_auth_failure("invalid_grant", start + 8 * 86400)
+
+    recovered = auth_health.record_authenticated_success(start + 8 * 86400 + 1)
+
+    assert recovered["health"] == "reauthorization_required"
+    assert recovered["last_failure_class"] is None
+    assert "recovery_pending" not in recovered
+
+
+def test_pending_validation_preserves_original_deadline(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    auth_health.record_auth_failure("invalid_grant", 900)
+    auth_health.record_pending_interactive_authorization(1000)
+    now = 1000 + 8 * 86400
+    recovered = auth_health.record_authenticated_success(now)
+    assert recovered["interactive_authorized_at"] == auth_health._iso(1000)
+    assert recovered["last_refresh_at"] == auth_health._iso(now)
+    assert recovered["health"] == "reauthorization_required"
+    assert "recovery_pending" not in recovered
+
+
+@pytest.mark.parametrize("pending", ["not-a-date", auth_health._iso(2000)])
+def test_invalid_pending_authorization_cannot_clear_failure(monkeypatch, tmp_path, pending):
+    configure(monkeypatch, tmp_path)
+    state = auth_health.record_auth_failure("invalid_grant", 900)
+    state["pending_interactive_authorized_at"] = pending
+    auth_health._write(state)
+    recovered = auth_health.record_authenticated_success(1100)
+    assert recovered["health"] == "reauthorization_required"
+    assert "interactive_authorized_at" not in recovered

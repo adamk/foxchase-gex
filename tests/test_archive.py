@@ -71,10 +71,43 @@ def test_collector_archives_computed_result_without_transient_fields(monkeypatch
                                   "open_interest":100,"gamma":.004,
                                   "volatility":.18,"multiplier":100}]}
     monkeypatch.setattr("gex_client.collector.fetch_sanitized_snapshot", lambda symbol: causal_input)
+    authenticated = []
+    monkeypatch.setattr(
+        "gex_client.collector.record_authenticated_success",
+        lambda: authenticated.append(True),
+    )
     monkeypatch.setattr("gex_client.collector.requests.post", fake_post)
     collect_once("http://127.0.0.1:8765", "SPX", "collector-spx")
 
     saved = snapshot("SPX", datetime.now(NY).date().isoformat(), 0)
+    assert authenticated == [True]
     assert captured_headers["X-GEX-Session"] == "collector-spx"
     assert "online" not in saved
     assert "client_cached" not in saved
+
+
+def test_collector_status_failure_does_not_fail_archive(monkeypatch, tmp_path, capsys):
+    def failed_status(*args, **kwargs):
+        raise RuntimeError("private sink detail")
+
+    monkeypatch.setattr("gex_client.collector.send_dashboard_status", failed_status)
+    test_collector_archives_computed_result_without_transient_fields(monkeypatch, tmp_path)
+    output = capsys.readouterr().out
+    assert "auth status sync failed: RuntimeError" in output
+    assert "private sink detail" not in output
+
+
+def test_failed_authenticated_collection_cannot_promote_health(monkeypatch):
+    from gex_client import collector
+    import pytest
+
+    def failed_fetch(symbol):
+        raise RuntimeError("authentication failed")
+
+    promoted = []
+    monkeypatch.setattr(collector, "verify_archive_mount", lambda: None)
+    monkeypatch.setattr(collector, "fetch_sanitized_snapshot", failed_fetch)
+    monkeypatch.setattr(collector, "record_authenticated_success", lambda: promoted.append(True))
+    with pytest.raises(RuntimeError, match="authentication failed"):
+        collect_once("http://127.0.0.1:8765", "SPX", "fixture")
+    assert promoted == []

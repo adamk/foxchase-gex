@@ -43,10 +43,10 @@
       <div class="ramp-legend-heading">
         <span class="section-kicker">Foxchase structure</span>
         <h2 id="ramp-legend-title">Gamma Ramp</h2>
-        <span class="ramp-legend-note">Reference legend · no additional classification logic</span>
+        <span class="ramp-legend-note">Active badges identify the index · NDX or SPX</span>
       </div>
       <div class="ramp-items">
-        <div class="ramp-item ramp-neutral">
+        <div class="ramp-item ramp-neutral" data-category="gamma-pin">
           <div class="ramp-item-heading">
             <span class="ramp-number">0</span>
             <div><strong>Gamma Pin</strong><small>Flat / concentrated at price</small></div>
@@ -60,8 +60,12 @@
             <rect class="ramp-bar-negative" x="70" y="50" width="10" height="5" rx="1" />
             <circle class="ramp-price-marker" cx="80" cy="41" r="2.5" />
           </svg>
+          <div class="ramp-active-state" aria-label="Active index">
+            <span class="ramp-active-chip" data-symbol="NDX" hidden>NDX</span>
+            <span class="ramp-active-chip" data-symbol="SPX" hidden>SPX</span>
+          </div>
         </div>
-        <div class="ramp-item ramp-neutral">
+        <div class="ramp-item ramp-neutral" data-category="mixed-gamma">
           <div class="ramp-item-heading">
             <span class="ramp-number">1</span>
             <div><strong>Mixed Gamma</strong><small>Opposing concentrations / not aligned</small></div>
@@ -75,8 +79,12 @@
             <rect class="ramp-bar-negative" x="46" y="48" width="34" height="5" rx="1" />
             <rect class="ramp-bar-negative" x="30" y="59" width="50" height="5" rx="1" />
           </svg>
+          <div class="ramp-active-state" aria-label="Active index">
+            <span class="ramp-active-chip" data-symbol="NDX" hidden>NDX</span>
+            <span class="ramp-active-chip" data-symbol="SPX" hidden>SPX</span>
+          </div>
         </div>
-        <div class="ramp-item ramp-positive">
+        <div class="ramp-item ramp-positive" data-category="forward-positive-ramp">
           <div class="ramp-item-heading">
             <span class="ramp-number">2</span>
             <div><strong>Forward Positive Ramp</strong><small>small → bigger → biggest (above price)</small></div>
@@ -88,8 +96,12 @@
             <rect class="ramp-bar-positive" x="80" y="19" width="31" height="5" rx="1" />
             <rect class="ramp-bar-positive" x="80" y="9" width="52" height="5" rx="1" />
           </svg>
+          <div class="ramp-active-state" aria-label="Active index">
+            <span class="ramp-active-chip" data-symbol="NDX" hidden>NDX</span>
+            <span class="ramp-active-chip" data-symbol="SPX" hidden>SPX</span>
+          </div>
         </div>
-        <div class="ramp-item ramp-positive">
+        <div class="ramp-item ramp-positive" data-category="backward-positive-ramp">
           <div class="ramp-item-heading">
             <span class="ramp-number">3</span>
             <div><strong>Backward Positive Ramp</strong><small>big → smaller → smallest (above price)</small></div>
@@ -101,8 +113,12 @@
             <rect class="ramp-bar-positive" x="80" y="19" width="31" height="5" rx="1" />
             <rect class="ramp-bar-positive" x="80" y="29" width="52" height="5" rx="1" />
           </svg>
+          <div class="ramp-active-state" aria-label="Active index">
+            <span class="ramp-active-chip" data-symbol="NDX" hidden>NDX</span>
+            <span class="ramp-active-chip" data-symbol="SPX" hidden>SPX</span>
+          </div>
         </div>
-        <div class="ramp-item ramp-negative">
+        <div class="ramp-item ramp-negative" data-category="forward-negative-ramp">
           <div class="ramp-item-heading">
             <span class="ramp-number">4</span>
             <div><strong>Forward Negative Ramp</strong><small>small → bigger → biggest (below price)</small></div>
@@ -114,8 +130,12 @@
             <rect class="ramp-bar-negative" x="49" y="54" width="31" height="5" rx="1" />
             <rect class="ramp-bar-negative" x="28" y="63" width="52" height="5" rx="1" />
           </svg>
+          <div class="ramp-active-state" aria-label="Active index">
+            <span class="ramp-active-chip" data-symbol="NDX" hidden>NDX</span>
+            <span class="ramp-active-chip" data-symbol="SPX" hidden>SPX</span>
+          </div>
         </div>
-        <div class="ramp-item ramp-negative">
+        <div class="ramp-item ramp-negative" data-category="backward-negative-ramp">
           <div class="ramp-item-heading">
             <span class="ramp-number">5</span>
             <div><strong>Backward Negative Ramp</strong><small>big → smaller → smallest (below price)</small></div>
@@ -127,6 +147,10 @@
             <rect class="ramp-bar-negative" x="49" y="54" width="31" height="5" rx="1" />
             <rect class="ramp-bar-negative" x="64" y="63" width="16" height="5" rx="1" />
           </svg>
+          <div class="ramp-active-state" aria-label="Active index">
+            <span class="ramp-active-chip" data-symbol="NDX" hidden>NDX</span>
+            <span class="ramp-active-chip" data-symbol="SPX" hidden>SPX</span>
+          </div>
         </div>
       </div>
     </section>
@@ -173,7 +197,6 @@
           <div class="chart-status" id="chart-status-NDX" aria-live="polite">waiting for data…</div>
         </div>
         <div class="chart-body">
-          <div id="pattern-box-NDX" class="pattern-box" hidden></div>
           <div id="gexChart-NDX" role="img" aria-label="NDX gamma exposure by strike"></div>
           <div class="chart-error" id="chart-error-NDX" hidden></div>
           <div class="unit" id="unit-NDX">shares per $ move</div>
@@ -220,7 +243,6 @@
           <div class="chart-status" id="chart-status-SPX" aria-live="polite">waiting for data…</div>
         </div>
         <div class="chart-body">
-          <div id="pattern-box-SPX" class="pattern-box" hidden></div>
           <div id="gexChart-SPX" role="img" aria-label="SPX gamma exposure by strike"></div>
           <div class="chart-error" id="chart-error-SPX" hidden></div>
           <div class="unit" id="unit-SPX">shares per $ move</div>

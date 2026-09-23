@@ -79,6 +79,17 @@ def record_interactive_authorization(now: float | None = None) -> dict:
     return state
 
 
+def record_pending_interactive_authorization(now: float | None = None) -> dict:
+    """Remember OAuth completion without declaring the API usable yet."""
+    epoch = float(now if now is not None else time.time())
+    state = load_status()
+    state["schema_version"] = 1
+    state["pending_interactive_authorized_at"] = _iso(epoch)
+    state["updated_at"] = _iso(epoch)
+    _write(state)
+    return state
+
+
 def record_refresh_success(now: float | None = None) -> dict:
     epoch = float(now if now is not None else time.time())
     state = load_status()
@@ -89,6 +100,42 @@ def record_refresh_success(now: float | None = None) -> dict:
     # Deliberately do not move interactive_authorized_at or the hard deadline.
     if state.get("interactive_authorized_at"):
         state["health"] = authorization_state(state, epoch)["health"]
+    _write(state)
+    return state
+
+
+def record_authenticated_success(now: float | None = None) -> dict:
+    """Clear a latched auth failure only after a real authenticated request."""
+    epoch = float(now if now is not None else time.time())
+    state = load_status()
+    pending = state.get("pending_interactive_authorized_at")
+    if pending:
+        try:
+            pending_epoch = datetime.fromisoformat(str(pending).replace("Z", "+00:00")).timestamp()
+        except (TypeError, ValueError):
+            return state
+        if pending_epoch > epoch:
+            return state
+        state = record_interactive_authorization(pending_epoch)
+        state["last_refresh_at"] = _iso(epoch)
+        state["updated_at"] = _iso(epoch)
+        state["health"] = authorization_state(state, epoch)["health"]
+        if state["health"] == "reauthorization_required":
+            state.pop("recovery_pending", None)
+        _write(state)
+        return state
+    previous_health = state.get("health")
+    state["schema_version"] = 1
+    state["last_refresh_at"] = _iso(epoch)
+    state["last_failure_class"] = None
+    state["updated_at"] = _iso(epoch)
+    if state.get("interactive_authorized_at"):
+        candidate = dict(state)
+        candidate["health"] = "healthy"
+        state["health"] = authorization_state(candidate, epoch)["health"]
+        if previous_health in {"reauthorization_required", "authentication_failed"} \
+                and state["health"] != "reauthorization_required":
+            state["recovery_pending"] = True
     _write(state)
     return state
 

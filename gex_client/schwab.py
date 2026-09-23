@@ -22,7 +22,7 @@ from gex_client.auth_health import (
     authorization_state,
     load_status,
     record_auth_failure,
-    record_interactive_authorization,
+    record_pending_interactive_authorization,
     record_refresh_success,
 )
 
@@ -157,7 +157,7 @@ def exchange_authorization_response(value: str) -> dict:
         )
     tokens = response.json()
     save_tokens(tokens)
-    record_interactive_authorization()
+    record_pending_interactive_authorization()
     return tokens
 
 

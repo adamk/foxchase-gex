@@ -25,6 +25,32 @@ def test_dashboard_renders_ndx_then_spx_with_independent_controls():
     assert html.count('class="ramp-schematic"') == 6
     assert 'aria-label="Gamma Pin schematic"' in html
     assert 'aria-label="Backward Negative Ramp schematic"' in html
+    assert 'data-category="gamma-pin"' in html
+    assert 'data-category="mixed-gamma"' in html
+    assert html.count('class="ramp-active-chip"') == 12
+    assert 'pattern-box' not in html
+
+
+def test_active_ramp_category_is_scoped_to_primary_pattern():
+    script = f"""
+const ui = require({json.dumps(str(SCRIPT))});
+console.log(JSON.stringify({{
+  primary: ui.activeRampCategory({{primary: "Mixed Gamma"}}),
+  composite: ui.activeRampCategory({{primary: "Gamma Pin", read_title: "Pinned / Mixed Gamma"}}),
+  explicitIndex: ui.activeRampCategory({{active_category_index: 2}}),
+  fallbackSignal: ui.activeRampCategory({{signals: [{{type: "Forward Negative Ramp"}}]}})
+}}));
+"""
+    result = subprocess.run(
+        ["node", "-e", script], cwd=ROOT, check=True, capture_output=True, text=True
+    )
+    values = json.loads(result.stdout)
+    assert values == {
+        "primary": "mixed-gamma",
+        "composite": "gamma-pin",
+        "explicitIndex": "forward-positive-ramp",
+        "fallbackSignal": "forward-negative-ramp",
+    }
 
 
 def test_dashboard_css_has_wide_grid_and_stacked_breakpoint():
@@ -33,7 +59,7 @@ def test_dashboard_css_has_wide_grid_and_stacked_breakpoint():
     assert "grid-template-columns: repeat(2, minmax(0, 1fr))" in css
     assert "@media (max-width: 900px)" in css
     assert ".chart-grid { grid-template-columns: 1fr; }" in css
-    assert "grid-template-rows: auto 78px" in css
+    assert "grid-template-rows: auto 78px auto" in css
     assert ".ramp-price-line" in css
     assert "min-height: 720px" in css
     assert "height: min(860px, calc(100vh - 90px))" in css
@@ -82,13 +108,14 @@ for (const [count, height, expected] of [[100, 620, 21], [75, 620, 20], [40, 620
     assert result.returncode == 0, result.stderr
 
 
-def test_foxchase_read_is_concise_and_preserves_classification_tags():
+def test_ramp_badges_replace_verbose_floating_read():
     script = SCRIPT.read_text(encoding="utf-8")
-    assert "pattern.action_read || pattern.summary" in script
+    assert "renderActiveRampCategory(data, state)" in script
+    assert "pattern.action_read || pattern.summary" not in script
     assert "pattern.key_read" not in script
     assert '<div class="pattern-key">' not in script
-    assert "pattern-signals" in script
-    assert "signal.type" in script
+    assert "pattern-signals" not in script
+    assert "signal?.type" in script
 
 
 def test_forward_and_backward_positive_ramps_are_visual_opposites():

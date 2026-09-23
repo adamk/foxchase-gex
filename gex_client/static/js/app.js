@@ -1,5 +1,13 @@
 const CHART_SYMBOLS = ["NDX", "SPX"];
 const SCALE_STORAGE_KEY = "foxchase-gex-scale";
+const RAMP_CATEGORIES = Object.freeze([
+  Object.freeze({key: "gamma-pin", index: 0, aliases: ["gamma pin", "pinned"]}),
+  Object.freeze({key: "mixed-gamma", index: 1, aliases: ["mixed gamma"]}),
+  Object.freeze({key: "forward-positive-ramp", index: 2, aliases: ["forward positive ramp"]}),
+  Object.freeze({key: "backward-positive-ramp", index: 3, aliases: ["backward positive ramp", "backwards positive ramp"]}),
+  Object.freeze({key: "forward-negative-ramp", index: 4, aliases: ["forward negative ramp"]}),
+  Object.freeze({key: "backward-negative-ramp", index: 5, aliases: ["backward negative ramp", "backwards negative ramp"]})
+]);
 // The API's chart values are raw "shares per $ move", not millions.
 // Keep presets in that same unit so a fixed range has no hidden conversion.
 const SCALE_OPTIONS = Object.freeze({
@@ -126,23 +134,65 @@ function showChartError(state, message = "") {
   box.hidden = !message;
 }
 
-function renderPattern(data, state) {
-  const box = $(`pattern-box-${state.symbol}`);
-  const pattern = data.patterns;
-  if (!pattern) {
-    box.hidden = true;
-    box.innerHTML = "";
-    return;
+function normalizePatternLabel(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function rampCategoryForValue(value) {
+  const numeric = typeof value === "number"
+    ? value
+    : typeof value === "string" && value.trim() ? Number(value) : NaN;
+  if (Number.isInteger(numeric) && numeric >= 0 && numeric < RAMP_CATEGORIES.length) {
+    return RAMP_CATEGORIES[numeric].key;
   }
-  const signals = (pattern.signals || []).slice(0, 3).map(signal =>
-    `<span>• ${escapeHtml(signal.type)}</span>`
-  ).join("");
-  box.innerHTML = `
-    <div class="pattern-kicker">Foxchase Read</div>
-    <div class="pattern-primary">${escapeHtml(pattern.read_title || pattern.primary)}</div>
-    <div class="pattern-summary">${escapeHtml(pattern.action_read || pattern.summary)}</div>
-    <div class="pattern-signals">${signals}</div>`;
-  box.hidden = false;
+  const label = normalizePatternLabel(value);
+  if (!label) return "";
+  return RAMP_CATEGORIES.find(category =>
+    category.aliases.some(alias => label.includes(normalizePatternLabel(alias)))
+  )?.key || "";
+}
+
+function activeRampCategory(pattern) {
+  if (!pattern || typeof pattern !== "object") return "";
+  const explicit = [
+    pattern.active_category,
+    pattern.category,
+    pattern.active_category_index,
+    pattern.category_index,
+    pattern.primary
+  ];
+  for (const candidate of explicit) {
+    const category = rampCategoryForValue(candidate);
+    if (category) return category;
+  }
+  return (Array.isArray(pattern.signals) ? pattern.signals : [])
+    .map(signal => typeof signal === "string" ? signal : signal?.type)
+    .map(rampCategoryForValue)
+    .find(Boolean) || "";
+}
+
+function clearActiveRampCategory(symbol) {
+  for (const item of document.querySelectorAll(".ramp-item[data-category]")) {
+    item.classList.remove(`is-active-${symbol}`);
+    const chip = item.querySelector(`.ramp-active-chip[data-symbol="${symbol}"]`);
+    if (chip) chip.hidden = true;
+  }
+}
+
+function renderActiveRampCategory(data, state) {
+  clearActiveRampCategory(state.symbol);
+  const category = activeRampCategory(data?.patterns);
+  if (!category) return;
+  const item = [...document.querySelectorAll(".ramp-item[data-category]")]
+    .find(candidate => candidate.dataset.category === category);
+  if (!item) return;
+  item.classList.add(`is-active-${state.symbol}`);
+  const chip = item.querySelector(`.ramp-active-chip[data-symbol="${state.symbol}"]`);
+  if (chip) chip.hidden = false;
 }
 
 function renderChart(data, state) {
@@ -233,7 +283,7 @@ function chartSessionId(symbol) {
 function renderResult(data, state, historical = false) {
   state.data = data;
   state.historical = historical;
-  renderPattern(data, state);
+  renderActiveRampCategory(data, state);
   renderChart(data, state);
   const stamp = data.captured_at || data.updated_at;
   const time = formatHistoricalTime(stamp);
@@ -273,6 +323,7 @@ async function loadGex(state) {
     if (!response.ok) throw new Error(data.error || "GEX request failed");
     renderResult(data, state, false);
   } catch (error) {
+    clearActiveRampCategory(state.symbol);
     showChartError(state, error.message);
     $(`chart-status-${state.symbol}`).textContent = "not connected";
   } finally {
@@ -328,6 +379,7 @@ async function loadHistoryTimeline(state) {
     $(`history-time-field-${state.symbol}`).hidden = state.historyTimeline.length === 0;
     await loadHistoricalSnapshot(state);
   } catch (error) {
+    clearActiveRampCategory(state.symbol);
     showChartError(state, error.message);
     $(`chart-status-${state.symbol}`).textContent = "historical archive unavailable";
   }
@@ -350,6 +402,7 @@ async function loadHistoricalSnapshot(state) {
     if (!response.ok) throw new Error(data.error || "historical snapshot failed");
     renderResult(data, state, true);
   } catch (error) {
+    clearActiveRampCategory(state.symbol);
     showChartError(state, error.message);
   }
 }
@@ -478,7 +531,10 @@ function boot() {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = {CHART_SYMBOLS, SCALE_OPTIONS, resolveScaleRange, selectReadableTicks};
+  module.exports = {
+    CHART_SYMBOLS, SCALE_OPTIONS, RAMP_CATEGORIES, resolveScaleRange,
+    activeRampCategory, rampCategoryForValue, selectReadableTicks
+  };
 }
 
 if (typeof document !== "undefined") boot();

@@ -10,6 +10,20 @@ const SCALE_OPTIONS = Object.freeze({
 
 const GEX_BAR_GAP = 0.08;
 const GEX_LABEL_SPACING_PX = 30;
+const NDX_DOMAIN_GEX_COVERAGE = 0.99;
+const NDX_MATERIAL_GEX_FRACTION = 0.01;
+const CLASSIFICATION_TONE_CLASSES = Object.freeze({
+  "gamma pin": "chart-classification--gamma-pin",
+  "mixed gamma": "chart-classification--mixed",
+  "forward positive ramp": "chart-classification--positive",
+  "backward positive ramp": "chart-classification--positive",
+  "forward negative ramp": "chart-classification--negative",
+  "backward negative ramp": "chart-classification--negative"
+});
+const CLASSIFICATION_CLASSES = Object.freeze([
+  "chart-classification--neutral",
+  ...new Set(Object.values(CLASSIFICATION_TONE_CLASSES))
+]);
 
 const $ = id => document.getElementById(id);
 
@@ -108,14 +122,79 @@ function chartHeightPixels(symbol) {
   return 620;
 }
 
-function escapeHtml(value) {
-  return String(value ?? "").replace(/[&<>'"]/g, character => ({
-    "&": "&amp;",
-    "<": "&lt;",
-    ">": "&gt;",
-    "'": "&#39;",
-    '"': "&quot;"
-  })[character]);
+function resolveStrikeDomain(data, state) {
+  // Preserve the existing SPX autorange. NDX is the only production chart
+  // with a wide, sparse strike tail that can dominate the viewport.
+  if (state?.symbol !== "NDX") return null;
+
+  const rows = (Array.isArray(data?.strikes) ? data.strikes : [])
+    .map(row => ({
+      strike: Number(row?.strike),
+      magnitude: Math.abs(Number(row?.gex))
+    }))
+    .filter(row => Number.isFinite(row.strike) && Number.isFinite(row.magnitude))
+    .sort((a, b) => a.strike - b.strike);
+  const spot = Number(data?.spot);
+  if (!rows.length || !Number.isFinite(spot)) return null;
+
+  const anchor = rows.reduce((best, row, index) =>
+    Math.abs(row.strike - spot) < Math.abs(rows[best].strike - spot) ? index : best, 0);
+  const totalMagnitude = rows.reduce((sum, row) => sum + row.magnitude, 0);
+  const targetMagnitude = totalMagnitude * NDX_DOMAIN_GEX_COVERAGE;
+  const maximumMagnitude = Math.max(...rows.map(row => row.magnitude));
+  const materialMagnitude = maximumMagnitude * NDX_MATERIAL_GEX_FRACTION;
+
+  let lowerIndex = 0;
+  let upperIndex = rows.length - 1;
+  if (targetMagnitude > 0) {
+    let best = null;
+    for (let left = 0; left <= anchor; left += 1) {
+      let mass = 0;
+      for (let right = left; right < rows.length; right += 1) {
+        mass += rows[right].magnitude;
+        if (right >= anchor && mass >= targetMagnitude) {
+          const candidate = {
+            span: rows[right].strike - rows[left].strike,
+            left,
+            right,
+            mass
+          };
+          if (!best || candidate.span < best.span ||
+              (candidate.span === best.span && candidate.mass > best.mass)) {
+            best = candidate;
+          }
+          break;
+        }
+      }
+    }
+    if (best) {
+      lowerIndex = best.left;
+      upperIndex = best.right;
+    }
+  }
+
+  // Keep any individually material remote concentration visible even when the
+  // remaining tail is too small to affect the cumulative-mass interval.
+  const materialIndices = rows
+    .map((row, index) => row.magnitude >= materialMagnitude ? index : -1)
+    .filter(index => index >= 0);
+  if (materialIndices.length) {
+    lowerIndex = Math.min(lowerIndex, materialIndices[0]);
+    upperIndex = Math.max(upperIndex, materialIndices[materialIndices.length - 1]);
+  }
+
+  const activeLower = Math.min(rows[lowerIndex].strike, spot);
+  const activeUpper = Math.max(rows[upperIndex].strike, spot);
+  const gaps = rows.slice(lowerIndex, upperIndex + 1)
+    .map((row, index, activeRows) => index ? row.strike - activeRows[index - 1].strike : 0)
+    .filter(gap => gap > 0);
+  const sortedGaps = [...gaps].sort((a, b) => a - b);
+  const typicalGap = sortedGaps.length
+    ? sortedGaps[Math.floor(sortedGaps.length / 2)]
+    : Math.max(1, activeUpper - activeLower);
+  const activeSpan = Math.max(activeUpper - activeLower, typicalGap * 4, 1);
+  const padding = Math.max(activeSpan * 0.08, typicalGap * 2);
+  return [activeLower - padding, activeUpper + padding];
 }
 
 function showError(message = "") {
@@ -130,25 +209,33 @@ function showChartError(state, message = "") {
   box.hidden = !message;
 }
 
-function renderPattern(data, state) {
-  const box = $(`pattern-box-${state.symbol}`);
-  const pattern = data.patterns;
-  if (!pattern) {
-    box.hidden = true;
-    box.innerHTML = "";
-    return;
-  }
+function clearClassification(symbol) {
+  const badge = $(`classification-${symbol}`);
+  if (!badge) return;
+  badge.textContent = "";
+  badge.hidden = true;
+  badge.classList.remove(...CLASSIFICATION_CLASSES);
+  badge.classList.add("chart-classification--neutral");
+}
 
-  const signals = (pattern.signals || []).slice(0, 3).map(signal =>
-    `<span>• ${escapeHtml(signal.type)}</span>`
-  ).join("");
+function classificationToneClass(primary) {
+  const key = typeof primary === "string"
+    ? primary.trim().toLowerCase()
+    : "";
+  return CLASSIFICATION_TONE_CLASSES[key] || "chart-classification--neutral";
+}
 
-  box.innerHTML = `
-    <div class="pattern-kicker">Foxchase Read</div>
-    <div class="pattern-primary">${escapeHtml(pattern.read_title || pattern.primary)}</div>
-    <div class="pattern-summary">${escapeHtml(pattern.action_read || pattern.summary)}</div>
-    <div class="pattern-signals">${signals}</div>`;
-  box.hidden = false;
+function renderClassification(data, state) {
+  clearClassification(state.symbol);
+  const badge = $(`classification-${state.symbol}`);
+  const primary = typeof data?.patterns?.primary === "string"
+    ? data.patterns.primary.trim()
+    : "";
+  if (!badge || !primary) return;
+  badge.textContent = primary;
+  badge.classList.remove("chart-classification--neutral");
+  badge.classList.add(classificationToneClass(primary));
+  badge.hidden = false;
 }
 
 function renderChart(data, state) {
@@ -159,6 +246,7 @@ function renderChart(data, state) {
   const positive = rows.map(row => Number(row.gex) > 0 ? Number(row.gex) : 0);
   const negative = rows.map(row => Number(row.gex) < 0 ? Number(row.gex) : 0);
   const range = resolveScaleRange({strikes: rows}, state);
+  const strikeDomain = resolveStrikeDomain({strikes: rows, spot: data.spot}, state);
   const tickSelection = selectReadableTicks(strikes, chartHeightPixels(state.symbol));
   const spot = Number(data.spot);
 
@@ -234,6 +322,7 @@ function renderChart(data, state) {
       tickmode: "array",
       tickvals: tickSelection.values,
       ticktext: tickSelection.labels,
+      ...(strikeDomain ? {range: strikeDomain, autorange: false} : {}),
       separatethousands: false,
       gridcolor: "#303030",
       tickfont: {color: "#f0f0f0", size: 10}
@@ -273,7 +362,7 @@ function formatAge(value) {
 
 function renderResult(data, state) {
   state.data = data;
-  renderPattern(data, state);
+  renderClassification(data, state);
   renderChart(data, state);
 
   const displaySymbol = data.display_symbol || state.symbol;
@@ -305,6 +394,7 @@ async function loadGex(state) {
     }
     renderResult(data, state);
   } catch (error) {
+    clearClassification(state.symbol);
     showChartError(state, error.message || "GEX request failed");
     $(`chart-status-${state.symbol}`).textContent = "not connected";
     showError(`${state.symbol}: ${error.message || "GEX request failed"}`);
@@ -373,7 +463,12 @@ if (typeof module !== "undefined" && module.exports) {
     CHART_SYMBOLS,
     SCALE_OPTIONS,
     resolveScaleRange,
+    resolveStrikeDomain,
     selectReadableTicks,
-    readScale
+    readScale,
+    clearClassification,
+    classificationToneClass,
+    renderClassification,
+    loadGex
   };
 }
