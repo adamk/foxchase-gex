@@ -1,0 +1,5 @@
+# Insert this exact URL condition inside each existing GEX HTTPS host block.
+# Keep the existing Gunicorn proxy directives in that host block's `else` branch.
+$HTTP["url"] =~ "^/\.well-known/(security\.txt|pgp-key\.txt)$" {
+    server.document-root = "/var/www/foxchase-gex-security"
+}

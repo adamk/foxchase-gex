@@ -1,0 +1,51 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+#
+# Foxchase Trading - RFC 9116 security.txt
+#
+# If you believe you have discovered a security vulnerability affecting
+# Foxchase Trading, please contact us using the address below.
+#
+# Please include enough technical detail for us to reproduce and
+# investigate the issue. Responsible disclosure is appreciated.
+#
+
+Canonical: https://gex.foxchasetrading.com/.well-known/security.txt
+Expires: 2027-09-01T00:00:00Z
+
+#
+# Security contact
+#
+
+Contact: mailto:adam@foxchasetrading.com
+
+#
+# OpenPGP
+#
+# The public key below may be used to encrypt security-related
+# correspondence and is the key used to sign this security.txt file.
+#
+
+Encryption: https://www.foxchasetrading.com/.well-known/pgp-key.txt
+
+#
+# We can respond to security reports in English.
+#
+
+Preferred-Languages: en
+
+#
+# +---------------------+
+# | FOXCHASE TRADING    |
+# +---------------------+
+#
+# Thank you for helping keep Foxchase Trading and its users secure.
+#
+-----BEGIN PGP SIGNATURE-----
+
+iHUEARYKAB0WIQTy9CTTX61WuHVezgb/gGFCBIDUSAUCargI5QAKCRD/gGFCBIDU
+SN2dAP9b9bR5d6EgY8mfOnzwApN1ZMTVUrspBHibYC7g0f3KZwEAh/I0T0BWl8oD
+sHUM9ppH9Rt5taDKNmPavXPo2oKFIwU=
+=FSl+
+-----END PGP SIGNATURE-----
