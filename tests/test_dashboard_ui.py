@@ -25,32 +25,10 @@ def test_dashboard_renders_ndx_then_spx_with_independent_controls():
     assert html.count('class="ramp-schematic"') == 6
     assert 'aria-label="Gamma Pin schematic"' in html
     assert 'aria-label="Backward Negative Ramp schematic"' in html
-    assert 'data-category="gamma-pin"' in html
-    assert 'data-category="mixed-gamma"' in html
-    assert html.count('class="ramp-active-chip"') == 12
+    assert "ramp-active" not in html
+    assert "data-category=" not in html
+    assert "Active badges" not in html
     assert 'pattern-box' not in html
-
-
-def test_active_ramp_category_is_scoped_to_primary_pattern():
-    script = f"""
-const ui = require({json.dumps(str(SCRIPT))});
-console.log(JSON.stringify({{
-  primary: ui.activeRampCategory({{primary: "Mixed Gamma"}}),
-  composite: ui.activeRampCategory({{primary: "Gamma Pin", read_title: "Pinned / Mixed Gamma"}}),
-  explicitIndex: ui.activeRampCategory({{active_category_index: 2}}),
-  fallbackSignal: ui.activeRampCategory({{signals: [{{type: "Forward Negative Ramp"}}]}})
-}}));
-"""
-    result = subprocess.run(
-        ["node", "-e", script], cwd=ROOT, check=True, capture_output=True, text=True
-    )
-    values = json.loads(result.stdout)
-    assert values == {
-        "primary": "mixed-gamma",
-        "composite": "gamma-pin",
-        "explicitIndex": "forward-positive-ramp",
-        "fallbackSignal": "forward-negative-ramp",
-    }
 
 
 def test_dashboard_css_has_wide_grid_and_stacked_breakpoint():
@@ -108,14 +86,19 @@ for (const [count, height, expected] of [[100, 620, 21], [75, 620, 20], [40, 620
     assert result.returncode == 0, result.stderr
 
 
-def test_ramp_badges_replace_verbose_floating_read():
+def test_chart_header_classification_keeps_verbose_read_removed():
     script = SCRIPT.read_text(encoding="utf-8")
-    assert "renderActiveRampCategory(data, state)" in script
+    template = TEMPLATE.read_text(encoding="utf-8")
+    styles = STYLES.read_text(encoding="utf-8")
+    assert "renderClassification(data, state)" in script
+    assert "y: strikes, x: negative" in script
+    assert "y: strikes, x: positive" in script
+    assert ".chart-symbol {\n  color: #f1f1f1;" in styles
     assert "pattern.action_read || pattern.summary" not in script
     assert "pattern.key_read" not in script
     assert '<div class="pattern-key">' not in script
     assert "pattern-signals" not in script
-    assert "signal?.type" in script
+    assert "Foxchase Read" not in template + script + styles
 
 
 def test_forward_and_backward_positive_ramps_are_visual_opposites():
@@ -152,3 +135,97 @@ def test_gamma_pin_has_one_dominant_near_price_bar():
     assert widths == {28: 12, 35: 72, 43: 14, 50: 10}
     assert max(widths.values()) == widths[35]
     assert all(width <= 14 for y, width in widths.items() if y != 35)
+
+
+def test_ramp_guide_is_static_and_each_chart_has_its_own_header_classification():
+    html = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    styles = STYLES.read_text(encoding="utf-8")
+
+    assert html.count('class="ramp-schematic"') == 6
+    assert "ramp-active" not in html
+    for symbol in ("NDX", "SPX"):
+        assert f'<span class="chart-classification" id="classification-{symbol}" hidden></span>' in html
+        assert f'<article class="chart-card" data-symbol="{symbol}">' in html
+    assert 'data-category="gamma-pin"' not in html
+    assert 'data-category="mixed-gamma"' not in html
+    assert "renderClassification(data, state)" in script
+    assert "patterns?.primary" in script
+    assert "pattern.signals" not in script
+    assert "pattern.action_read" not in script
+    assert "pattern.summary" not in script
+    assert "pattern.key_read" not in script
+    assert "read_title" not in script
+    assert "renderActiveRampCategory" not in script
+    assert "ramp-active" not in styles
+
+    for semantic_class, color in (
+        ("chart-classification--neutral", "#999"),
+        ("chart-classification--gamma-pin", "#ddd"),
+        ("chart-classification--mixed", "#d8bf00"),
+        ("chart-classification--positive", "#27b46e"),
+        ("chart-classification--negative", "#e04b4b"),
+    ):
+        assert f".{semantic_class}" in styles
+        assert f"color: {color}" in styles
+
+
+def test_header_classification_uses_only_primary_and_clears_per_symbol_on_api_failure():
+    script = f"""
+const assert = require("node:assert/strict");
+const ui = require({json.dumps(str(SCRIPT))});
+async function main() {{
+class ClassList {{
+  constructor() {{ this.values = new Set(); }}
+  add(...values) {{ values.forEach(value => this.values.add(value)); }}
+  remove(...values) {{ values.forEach(value => this.values.delete(value)); }}
+  contains(value) {{ return this.values.has(value); }}
+}}
+class Element {{
+  constructor() {{ this.textContent = ""; this.hidden = true; this.classList = new ClassList(); }}
+}}
+const elements = new Map();
+for (const id of [
+  "classification-NDX", "classification-SPX",
+  "chart-status-NDX", "chart-status-SPX", "chart-error-NDX", "chart-error-SPX"
+]) elements.set(id, new Element());
+global.document = {{getElementById: id => elements.get(id)}};
+const ndx = {{symbol: "NDX", loadInFlight: false}};
+const spx = {{symbol: "SPX", loadInFlight: false}};
+ui.renderClassification({{
+  patterns: {{primary: "Mixed Gamma", signals: ["Gamma Pin"], read_title: "verbose"}}
+}}, ndx);
+ui.renderClassification({{patterns: {{primary: "Forward Positive Ramp"}}}}, spx);
+assert.equal(elements.get("classification-NDX").textContent, "Mixed Gamma");
+assert.equal(elements.get("classification-NDX").classList.contains("chart-classification--mixed"), true);
+assert.equal(elements.get("classification-SPX").classList.contains("chart-classification--positive"), true);
+for (const [primary, tone] of [
+  ["Gamma Pin", "chart-classification--gamma-pin"],
+  ["Mixed Gamma", "chart-classification--mixed"],
+  ["Forward Positive Ramp", "chart-classification--positive"],
+  ["Backward Positive Ramp", "chart-classification--positive"],
+  ["Forward Negative Ramp", "chart-classification--negative"],
+  ["Backward Negative Ramp", "chart-classification--negative"]
+]) {{
+  ui.renderClassification({{patterns: {{primary}}}}, ndx);
+  assert.equal(elements.get("classification-NDX").classList.contains(tone), true);
+}}
+ui.renderClassification({{patterns: {{signals: ["Gamma Pin"], summary: "ignored"}}}}, ndx);
+assert.equal(elements.get("classification-NDX").hidden, true);
+assert.equal(elements.get("classification-NDX").textContent, "");
+assert.equal(elements.get("classification-NDX").classList.contains("chart-classification--neutral"), true);
+assert.equal(elements.get("classification-SPX").hidden, false);
+
+global.fetch = async () => {{ throw new Error("API unavailable"); }};
+ui.renderClassification({{patterns: {{primary: "Gamma Pin"}}}}, ndx);
+await ui.loadGex(ndx);
+assert.equal(elements.get("classification-NDX").hidden, true);
+assert.equal(elements.get("classification-NDX").classList.contains("chart-classification--neutral"), true);
+assert.equal(elements.get("classification-SPX").hidden, false);
+console.log("HEADER_CLASSIFICATION_PASS");
+}}
+main().catch(error => {{ console.error(error); process.exitCode = 1; }});
+"""
+    result = subprocess.run(["node", "-e", script], cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+    assert "HEADER_CLASSIFICATION_PASS" in result.stdout
