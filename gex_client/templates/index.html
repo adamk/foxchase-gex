@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Foxchase GEX</title>
-  <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="stylesheet" href="/static/css/style.css?v=gui-schwab-setup-state-20261008">
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
-<body>
+<body data-local-operator-access="{{ 'true' if local_operator_access else 'false' }}">
   <header class="topbar">
     <div class="brand"><span>foxchase</span><strong>gex</strong></div>
     <div class="presence" aria-live="polite">
@@ -16,27 +16,31 @@
   </header>
 
   <main class="page">
+    <section class="operator-auth-strip" id="operator-auth-strip" aria-live="polite" hidden>
+      <span id="operator-auth-label"></span>
+      <a class="operator-auth-link" id="operator-reauthorize-link" href="/operator/reauthorize-schwab" target="_blank" rel="noopener noreferrer" hidden>Reauthorize Schwab</a>
+      <a class="operator-auth-link operator-auth-logout" id="operator-logout-link" href="/operator/logout" hidden>Log out</a>
+    </section>
+    {% if local_operator_access %}
+    <a class="local-auth-continue" id="local-auth-continue" href="/setup" hidden>Paste Schwab redirect URL</a>
+    {% endif %}
     <section class="controls" aria-label="Dashboard controls">
       <button id="refresh" type="button">refresh</button>
       <div class="status" id="updated">loading local Schwab data…</div>
     </section>
 
+    {% if schwab_connected %}
+    <div class="setup-connected" role="status">Schwab Connected</div>
+    {% endif %}
+
     <div class="error" id="error" hidden></div>
 
     <section class="setup-card" id="setup-card" hidden>
-      <div>
-        <div class="setup-kicker">One-time setup</div>
-        <h2>Connect your Schwab developer app</h2>
-        <p>Your app credentials and OAuth token stay on this computer. They are never sent to Foxchase Trading.</p>
-      </div>
-      <ol>
-        <li>Create an Individual Developer app at <a href="https://developer.schwab.com/" target="_blank" rel="noopener">developer.schwab.com</a> with <strong>Market Data Production</strong>.</li>
-        <li>Set its callback URL to exactly <code>https://127.0.0.1</code> and wait for <strong>Ready for use</strong>.</li>
-        <li>Copy <code>.env.example</code> to <code>.env</code>, then add the app key and secret.</li>
-        <li>Run <code>python -m gex_client.login</code>, authorize Schwab, and paste the full redirect URL.</li>
-        <li>Run <code>python run.py</code> again.</li>
-      </ol>
+      <div class="setup-kicker">Schwab connection setup</div>
+      <h2>Complete the local Schwab setup</h2>
+      <p>The GUI setup is available when Foxchase GEX runs on this computer at its loopback address. Start it with <code>python run.py</code> and open <code>http://127.0.0.1:8765</code>.</p>
       <div class="setup-state" id="setup-state"></div>
+      <a href="/setup">Open local setup</a>
     </section>
 
     <section class="ramp-legend" aria-labelledby="ramp-legend-title">
@@ -232,6 +236,6 @@
     </section>
   </main>
 
-  <script src="/static/js/app.js"></script>
+  <script src="/static/js/app.js?v=schwab-local-reauth-state-20261008"></script>
 </body>
 </html>

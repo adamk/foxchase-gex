@@ -414,6 +414,8 @@ async function checkSetup() {
     const setup = await response.json();
     const card = $("setup-card");
     card.hidden = setup.ready;
+    const continueLink = $("local-auth-continue");
+    if (continueLink) continueLink.hidden = !setup.authorization_pending;
     if (!setup.ready) {
       const state = [
         `App key: ${setup.client_id_configured ? "configured" : "missing"}`,
@@ -427,6 +429,81 @@ async function checkSetup() {
   } catch (_) {
     return false;
   }
+}
+
+function formatRemainingAuthTime(value) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "remaining time unavailable";
+  const seconds = value;
+  const whole = Math.floor(seconds);
+  const days = Math.floor(whole / 86400);
+  const hours = Math.floor((whole % 86400) / 3600);
+  return String(days) + "d " + String(hours) + "h remaining";
+}
+
+function hideOperatorAuthStatus() {
+  const strip = $("operator-auth-strip");
+  const label = $("operator-auth-label");
+  const reauthorize = $("operator-reauthorize-link");
+  const logout = $("operator-logout-link");
+  if (strip) strip.hidden = true;
+  if (label) label.textContent = "";
+  if (reauthorize) reauthorize.hidden = true;
+  if (logout) logout.hidden = true;
+}
+
+async function loadOperatorAuthStatus() {
+  const strip = $("operator-auth-strip");
+  if (!strip) return;
+  try {
+    const response = await fetch("/api/operator/auth-status", {
+      cache: "no-store",
+      credentials: "same-origin"
+    });
+    if (response.status === 401 || !response.ok) {
+      hideOperatorAuthStatus();
+      return;
+    }
+    const status = await response.json();
+    const label = $("operator-auth-label");
+    const reauthorize = $("operator-reauthorize-link");
+    const logout = $("operator-logout-link");
+    if (!label || !reauthorize || !logout) return;
+    const localOperatorAccess = document.body?.dataset?.localOperatorAccess === "true";
+
+    if (status.state === "healthy") {
+      label.textContent = "Schwab auth · " + formatRemainingAuthTime(status.remaining_seconds);
+      reauthorize.hidden = true;
+    } else if (status.state === "due_soon") {
+      label.textContent = "Schwab auth · Reauthorize soon";
+      reauthorize.hidden = false;
+    } else if (status.state === "reauth_required") {
+      label.textContent = "Schwab auth · Reauthorization required";
+      reauthorize.hidden = false;
+    } else {
+      hideOperatorAuthStatus();
+      return;
+    }
+    reauthorize.href = "/operator/reauthorize-schwab";
+    reauthorize.target = "_blank";
+    reauthorize.rel = "noopener noreferrer";
+    logout.href = "/operator/logout";
+    logout.hidden = localOperatorAccess;
+    strip.hidden = false;
+  } catch (_) {
+    hideOperatorAuthStatus();
+  }
+}
+
+function startOperatorAuthStatusRefresh() {
+  setInterval(loadOperatorAuthStatus, 30_000);
+  const localOperatorAccess = document.body?.dataset?.localOperatorAccess === "true";
+  if (localOperatorAccess) setInterval(checkSetup, 5_000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) {
+      loadOperatorAuthStatus();
+      if (localOperatorAccess) checkSetup();
+    }
+  });
 }
 
 function isMarketRefreshWindow() {
@@ -451,6 +528,8 @@ const chartStates = Object.fromEntries(CHART_SYMBOLS.map(symbol => [symbol, {
 }]));
 
 function boot() {
+  loadOperatorAuthStatus();
+  startOperatorAuthStatusRefresh();
   const sessionKey = "foxchase-gex-browser-session";
   sessionId = sessionStorage.getItem(sessionKey);
   if (!sessionId) {
@@ -504,7 +583,8 @@ if (typeof module !== "undefined" && module.exports) {
   module.exports = {
     CHART_SYMBOLS, SCALE_OPTIONS, resolveScaleRange,
     classificationToneClass, clearClassification, renderClassification,
-    loadGex, selectReadableTicks
+    loadGex, selectReadableTicks, loadOperatorAuthStatus,
+    startOperatorAuthStatusRefresh, checkSetup, formatRemainingAuthTime
   };
 }
 

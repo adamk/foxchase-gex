@@ -414,6 +414,75 @@ async function refreshAll() {
   }
 }
 
+function formatRemainingAuthTime(value) {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "remaining time unavailable";
+  const seconds = value;
+  const whole = Math.floor(seconds);
+  const days = Math.floor(whole / 86400);
+  const hours = Math.floor((whole % 86400) / 3600);
+  return String(days) + "d " + String(hours) + "h remaining";
+}
+
+function hideOperatorAuthStatus() {
+  const strip = $("operator-auth-strip");
+  const label = $("operator-auth-label");
+  const reauthorize = $("operator-reauthorize-link");
+  const logout = $("operator-logout-link");
+  if (strip) strip.hidden = true;
+  if (label) label.textContent = "";
+  if (reauthorize) reauthorize.hidden = true;
+  if (logout) logout.hidden = true;
+}
+
+async function loadOperatorAuthStatus() {
+  const strip = $("operator-auth-strip");
+  if (!strip) return;
+  try {
+    const response = await fetch("/api/operator/auth-status", {
+      cache: "no-store",
+      credentials: "same-origin"
+    });
+    if (response.status === 401 || !response.ok) {
+      hideOperatorAuthStatus();
+      return;
+    }
+    const status = await response.json();
+    const label = $("operator-auth-label");
+    const reauthorize = $("operator-reauthorize-link");
+    const logout = $("operator-logout-link");
+    if (!label || !reauthorize || !logout) return;
+
+    if (status.state === "healthy") {
+      label.textContent = "Schwab auth · " + formatRemainingAuthTime(status.remaining_seconds);
+      reauthorize.hidden = true;
+    } else if (status.state === "due_soon") {
+      label.textContent = "Schwab auth · Reauthorize soon";
+      reauthorize.hidden = false;
+    } else if (status.state === "reauth_required") {
+      label.textContent = "Schwab auth · Reauthorization required";
+      reauthorize.hidden = false;
+    } else {
+      hideOperatorAuthStatus();
+      return;
+    }
+    reauthorize.href = "/operator/reauthorize-schwab";
+    reauthorize.target = "_blank";
+    reauthorize.rel = "noopener noreferrer";
+    logout.href = "/operator/logout";
+    logout.hidden = false;
+    strip.hidden = false;
+  } catch (_) {
+    hideOperatorAuthStatus();
+  }
+}
+
+function startOperatorAuthStatusRefresh() {
+  setInterval(loadOperatorAuthStatus, 30_000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) loadOperatorAuthStatus();
+  });
+}
+
 function isMarketRefreshWindow() {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: "America/New_York",
@@ -437,6 +506,8 @@ const chartStates = Object.fromEntries(CHART_SYMBOLS.map(symbol => [symbol, {
 
 function boot() {
   $("refresh").addEventListener("click", refreshAll);
+  loadOperatorAuthStatus();
+  startOperatorAuthStatusRefresh();
 
   for (const symbol of CHART_SYMBOLS) {
     const state = chartStates[symbol];
@@ -465,6 +536,9 @@ if (typeof module !== "undefined" && module.exports) {
     resolveScaleRange,
     resolveStrikeDomain,
     selectReadableTicks,
+    loadOperatorAuthStatus,
+    startOperatorAuthStatusRefresh,
+    formatRemainingAuthTime,
     readScale,
     clearClassification,
     classificationToneClass,

@@ -44,10 +44,49 @@ cd foxchase-gex
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
 ```
 
-Edit `.env`:
+## 3. Connect Schwab in the local dashboard
+
+Start Foxchase GEX:
+
+```bash
+python run.py
+```
+
+Open [http://127.0.0.1:8765](http://127.0.0.1:8765). On first run, the local
+dashboard opens the Schwab setup wizard. Enter the app key and app secret from
+your Schwab developer app; the redirect URI defaults to `https://127.0.0.1` and
+must exactly match the callback registered with Schwab.
+
+Choose **Save & Connect Schwab**. Foxchase GEX saves these credentials on your
+computer in `~/.foxchase-gex/schwab_credentials.json` with file mode `0600` in a
+user-only `0700` directory, then opens the existing Schwab authorization flow.
+The secret is submitted only to this local app and to Schwab's token endpoint;
+it is not returned to the browser after saving and is not sent to Foxchase
+Trading. Foxchase GEX also creates a local session-signing secret in the same
+private directory when needed.
+
+Sign in to Schwab and approve the developer app. Schwab redirects to
+`https://127.0.0.1/?code=...`; that local HTTPS address may not load. Copy the
+complete URL from the browser address bar, return to the local setup page, and
+paste it into the form. The code is exchanged locally through the existing
+OAuth implementation and is neither displayed again nor logged. After a
+successful exchange, the dashboard shows **Schwab Connected** and the local
+Schwab authorization status.
+
+By default, `python run.py` binds to loopback only. Keep it on `127.0.0.1` or
+`localhost` while using the setup wizard; the wizard is disabled for
+non-loopback hosts. Credentials and OAuth tokens stay on your computer.
+
+## 4. Advanced environment and CLI setup
+
+Manual `.env` setup remains supported for advanced users. Copy the example and
+set the values for your own Schwab developer app:
+
+```bash
+cp .env.example .env
+```
 
 ```dotenv
 SCHWAB_CLIENT_ID=your_app_key
@@ -55,27 +94,12 @@ SCHWAB_CLIENT_SECRET=your_app_secret
 SCHWAB_REDIRECT_URI=https://127.0.0.1
 ```
 
-## 3. Authorize Schwab
+Environment credentials take precedence over the GUI credential file. To use
+the existing terminal flow instead, run `python -m gex_client.login`, open the
+printed authorization URL, and paste the full Schwab redirect URL at the hidden
+terminal prompt. The token is stored with user-only permissions in
+`~/.foxchase-gex/schwab_tokens.json` by default.
 
-Run:
-
-```bash
-python -m gex_client.login
-```
-
-The command prints a Schwab authorization link. Open it, sign in with your normal Schwab brokerage credentials, approve access, and select the applicable account. Schwab then redirects the browser to `https://127.0.0.1/?code=...`. It is normal for that local HTTPS page not to load. Immediately copy the **entire URL from the browser address bar** and paste it into the terminal prompt. The pasted input is hidden.
-
-The OAuth token is then written with user-only permissions to `~/.foxchase-gex/schwab_tokens.json` by default. If authorization fails, verify that the callback URL matches exactly and that the app says **Ready for use**.
-
-## 4. Run the dashboard
-
-Start the local dashboard:
-
-```bash
-python run.py
-```
-
-Open [http://127.0.0.1:8765](http://127.0.0.1:8765). The web server binds only to the loopback interface, so it is not exposed to other devices on your network.
 
 ## Production UI source and deployment
 

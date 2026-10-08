@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import fcntl
+import hmac
 import json
 import logging
 import math
@@ -26,6 +27,8 @@ from gex_client.auth_health import (
     record_pending_interactive_authorization,
     record_refresh_success,
 )
+from gex_client.auth_lifecycle import record_full_oauth_authorization
+from gex_client.local_setup import CredentialStoreError, configured_credentials
 
 
 load_dotenv()
@@ -56,19 +59,20 @@ def token_path() -> Path:
 
 
 def _credentials() -> tuple[str, str, str]:
-    client_id = os.getenv("SCHWAB_CLIENT_ID", "").strip()
-    client_secret = os.getenv("SCHWAB_CLIENT_SECRET", "").strip()
-    redirect_uri = os.getenv("SCHWAB_REDIRECT_URI", "https://127.0.0.1").strip()
-    if not client_id or not client_secret:
-        raise SchwabError(
-            "SCHWAB_CLIENT_ID and SCHWAB_CLIENT_SECRET are required in .env"
-        )
-    return client_id, client_secret, redirect_uri
+    try:
+        return configured_credentials()
+    except CredentialStoreError as exc:
+        raise SchwabError(str(exc)) from exc
 
 
-def authorization_url() -> str:
+def authorization_url(state: str | None = None) -> str:
     client_id, _, redirect_uri = _credentials()
-    return f"{AUTH_URL}?{urlencode({'client_id': client_id, 'redirect_uri': redirect_uri})}"
+    parameters = {"client_id": client_id, "redirect_uri": redirect_uri}
+    if state is not None:
+        if not isinstance(state, str) or not 32 <= len(state) <= 1024:
+            raise SchwabError("OAuth state is invalid")
+        parameters["state"] = state
+    return f"{AUTH_URL}?{urlencode(parameters)}"
 
 
 def _basic_auth_header(client_id: str, client_secret: str) -> str:
@@ -132,16 +136,26 @@ def load_tokens() -> dict | None:
     return value if isinstance(value, dict) else None
 
 
-def exchange_authorization_response(value: str) -> dict:
+def exchange_authorization_response(value: str, expected_state: str | None = None) -> dict:
     value = value.strip()
     if not value:
         raise SchwabError("authorization response is empty")
+    state_values = []
     if "://" in value:
-        code = parse_qs(urlparse(value).query).get("code", [""])[0]
+        query = parse_qs(urlparse(value).query)
+        code = query.get("code", [""])[0]
+        state_values = query.get("state", [])
     else:
         code = value
     if not code:
         raise SchwabError("the pasted value did not contain an authorization code")
+    if expected_state is not None and (
+        not isinstance(expected_state, str)
+        or len(expected_state) < 32
+        or len(state_values) != 1
+        or not hmac.compare_digest(state_values[0], expected_state)
+    ):
+        raise SchwabError("the pasted authorization response did not match the expected OAuth state")
 
     client_id, client_secret, redirect_uri = _credentials()
     response = requests.post(
@@ -164,6 +178,12 @@ def exchange_authorization_response(value: str) -> dict:
     tokens = response.json()
     save_tokens(tokens)
     record_pending_interactive_authorization()
+    try:
+        record_full_oauth_authorization()
+    except OSError as exc:
+        raise SchwabError(
+            "authorization succeeded, but the nonsecret lifecycle metadata could not be saved"
+        ) from exc
     return tokens
 
 

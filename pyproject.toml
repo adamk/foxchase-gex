@@ -9,6 +9,7 @@ description = "Open-source local client for the Foxchase Trading GEX dashboard"
 requires-python = ">=3.9"
 dependencies = [
   "Flask>=3.0,<4",
+  "Werkzeug>=3.0,<4",
   "python-dotenv>=1.0,<2",
   "requests>=2.31,<3",
 ]

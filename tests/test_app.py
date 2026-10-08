@@ -81,6 +81,7 @@ def test_setup_status_never_returns_credentials(monkeypatch, tmp_path):
     monkeypatch.setenv("SCHWAB_CLIENT_ID", "private-client-id")
     monkeypatch.setenv("SCHWAB_CLIENT_SECRET", "private-client-secret")
     monkeypatch.setattr(app_module, "token_path", lambda: tmp_path / "missing-token.json")
+    monkeypatch.setitem(app_module.app.config, "LOCAL_SETUP_ENABLED", True)
     client = app_module.app.test_client()
 
     response = client.get("/api/setup-status")
@@ -91,8 +92,18 @@ def test_setup_status_never_returns_credentials(monkeypatch, tmp_path):
         "client_id_configured": True,
         "client_secret_configured": True,
         "token_configured": False,
+        "authorization_pending": False,
     }
     assert "private-client" not in response.get_data(as_text=True)
+
+
+def test_setup_status_is_not_available_to_remote_or_hosted_visitors(monkeypatch):
+    monkeypatch.setitem(app_module.app.config, "LOCAL_SETUP_ENABLED", False)
+    client = app_module.app.test_client()
+
+    response = client.get("/api/setup-status")
+
+    assert response.status_code == 404
 
 
 def test_history_routes(monkeypatch, tmp_path):

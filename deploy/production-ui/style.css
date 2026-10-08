@@ -505,3 +505,33 @@ button:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+.operator-auth-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0 0 12px;
+  padding: 8px 11px;
+  border: 1px solid #444;
+  border-radius: 5px;
+  background: #191919;
+  color: #ddd;
+  font-size: 13px;
+}
+
+.operator-auth-strip[hidden],
+.operator-auth-link[hidden] {
+  display: none !important;
+}
+
+.operator-auth-link {
+  color: #d8bf00;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.operator-auth-logout {
+  margin-left: auto;
+  color: #aaa;
+}

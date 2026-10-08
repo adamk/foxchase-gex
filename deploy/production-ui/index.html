@@ -5,7 +5,7 @@
   <title>Foxchase GEX Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <link rel="stylesheet" href="/static/css/style.css?v=dual-index-v1" />
+  <link rel="stylesheet" href="/static/css/style.css?v=schwab-auth-status-20261008" />
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
 </head>
@@ -18,6 +18,11 @@
   </header>
 
   <main class="page">
+    <section class="operator-auth-strip" id="operator-auth-strip" aria-live="polite" hidden>
+      <span id="operator-auth-label"></span>
+      <a class="operator-auth-link" id="operator-reauthorize-link" href="/operator/reauthorize-schwab" target="_blank" rel="noopener noreferrer" hidden>Reauthorize Schwab</a>
+      <a class="operator-auth-link operator-auth-logout" id="operator-logout-link" href="/operator/logout" hidden>Log out</a>
+    </section>
     <section class="controls" aria-label="Dashboard controls">
       <button id="refresh" type="button">refresh</button>
       <div class="status" id="updated" aria-live="polite">loading...</div>
@@ -203,6 +208,6 @@
     </section>
   </main>
 
-  <script src="/static/js/app.js?v=dual-index-v1"></script>
+  <script src="/static/js/app.js?v=schwab-auth-status-20261008"></script>
 </body>
 </html>

@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
+  <title>Connect Schwab · Foxchase GEX</title>
+  <link rel="stylesheet" href="/static/css/style.css?v=gui-schwab-setup-20261008">
+</head>
+<body class="setup-page">
+  <main class="setup-shell">
+    <header class="setup-brand"><span>foxchase</span><strong>gex</strong></header>
+    <section class="setup-card setup-wizard" aria-labelledby="setup-title">
+      <div class="setup-kicker">Local first-run setup</div>
+      <h1 id="setup-title">{{ "Reauthorize Schwab" if setup_ready else "Connect your Schwab developer app" }}</h1>
+      <p class="setup-intro">Your Schwab credentials and OAuth tokens stay on this computer. They are not sent to Foxchase Trading.</p>
+
+      {% if error_message %}
+      <p class="setup-error" role="alert">{{ error_message }}</p>
+      {% endif %}
+
+      {% if credential_source == "missing" or credential_source == "invalid_local_file" %}
+      <form method="post" action="/setup/credentials" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="client_id">Schwab App Key</label>
+        <input id="client_id" name="client_id" type="text" maxlength="1024" autocomplete="off" required>
+
+        <label for="client_secret">Schwab App Secret</label>
+        <input id="client_secret" name="client_secret" type="password" maxlength="4096" autocomplete="new-password" required>
+
+        <label for="redirect_uri">Redirect URI</label>
+        <input id="redirect_uri" name="redirect_uri" type="url" value="https://127.0.0.1" maxlength="2048" required>
+        <p class="setup-hint">Use the exact callback URI registered for your Schwab developer app.</p>
+
+        <button type="submit">Save &amp; Connect Schwab</button>
+      </form>
+      {% elif credential_source == "incomplete_environment" %}
+      <p class="setup-error" role="alert">The environment contains only part of the Schwab credential pair. Configure both environment variables or remove the partial override before continuing.</p>
+      {% else %}
+      <p class="setup-safe-note">Credentials are available from {{ "your environment" if credential_source == "environment" else "the private local credential file" }}. Their values are never displayed here.</p>
+      <a class="setup-button" href="/operator/reauthorize-schwab">{{ "Start or restart Schwab authorization" if authorization_pending else "Open Schwab authorization" }}</a>
+      <form method="post" action="/setup/complete" autocomplete="off">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+        <label for="authorization_response">Paste the full redirected URL</label>
+        <textarea id="authorization_response" name="authorization_response" rows="3" maxlength="8192" autocomplete="off" spellcheck="false" placeholder="https://127.0.0.1/?code=…" required></textarea>
+        <p class="setup-hint">After Schwab redirects to https://127.0.0.1, copy the complete address-bar URL and paste it here. It is exchanged locally and not shown or logged.</p>
+        <button type="submit">{{ "Complete Schwab reauthorization" if setup_ready else "Complete Schwab connection" }}</button>
+      </form>
+      {% endif %}
+
+      <p class="setup-footer">Advanced users can still configure <code>.env</code> and use <code>python -m gex_client.login</code>.</p>
+    </section>
+  </main>
+</body>
+</html>

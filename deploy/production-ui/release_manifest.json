@@ -1,5 +1,5 @@
 {
-  "release_id": "foxchase-gex-production-ui-20260922-reconciled-ndx-viewport",
+  "release_id": "foxchase-gex-production-ui-20261008-schwab-operator-status",
   "source_root": "deploy/production-ui",
   "service": "foxchase-gex.service",
   "targets": {
@@ -8,9 +8,9 @@
     "style.css": "/opt/foxchase-gex/static/css/style.css"
   },
   "sha256": {
-    "index.html": "a32a780ac1d39a164ecc1fdae340d790ef08b3c13ee59d8cfe6d82ab22767895",
-    "app.js": "b962be3de925f64566564e5af2bb831fb45d092bd601c324d71caa04694e5caf",
-    "style.css": "6d478c440a151e7b0b186e66164c2ad02ae8203c8b01beaf76a77e764e0559f2"
+    "index.html": "9d10a3692407dda7f3d22fa32bdf5c77e01092861c5a48998180183f07022408",
+    "app.js": "072724c0cfa035c9750eae3ec84df894bc415b39b54823ab34f1d07adddbe356",
+    "style.css": "dbcabbbb051bf5a15ef81c54e4bb18f2b4bf91c47aef536afd85470e3f1b94ad"
   },
   "api_checks": [
     "https://gex.foxchasetrading.com/",

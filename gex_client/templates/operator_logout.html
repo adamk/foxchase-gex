@@ -1,0 +1,13 @@
+<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Foxchase GEX Operator Logout</title></head>
+<body>
+  <main>
+    <p>End the current operator session?</p>
+    <form method="post" action="/operator/logout">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+      <button type="submit">Log out</button>
+    </form>
+  </main>
+</body>
+</html>
