@@ -5,12 +5,13 @@ from __future__ import annotations
 import base64
 import fcntl
 import json
+import logging
 import math
 import os
 import tempfile
 import time
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 from zoneinfo import ZoneInfo
@@ -33,6 +34,11 @@ AUTH_URL = "https://api.schwabapi.com/v1/oauth/authorize"
 TOKEN_URL = "https://api.schwabapi.com/v1/oauth/token"
 MARKET_DATA_BASE = "https://api.schwabapi.com/marketdata/v1"
 NY = ZoneInfo("America/New_York")
+_REFRESH_LOGGER = logging.getLogger("foxchase.gex.schwab")
+_REFRESH_LOGGER.setLevel(logging.INFO)
+if not _REFRESH_LOGGER.handlers:
+    _REFRESH_LOGGER.addHandler(logging.StreamHandler())
+_REFRESH_LOGGER.propagate = False
 
 
 class SchwabError(RuntimeError):
@@ -200,35 +206,105 @@ def _reauthorization_required() -> bool:
     )
 
 
+def _log_refresh_event(
+    event: str,
+    *,
+    reason: str | None = None,
+    http_status: int | None = None,
+    error_class: str | None = None,
+) -> None:
+    """Emit a token-free refresh lifecycle record for multi-process diagnosis."""
+    fields = [
+        f"event={event}",
+        f"pid={os.getpid()}",
+        f"timestamp={datetime.now(timezone.utc).isoformat(timespec='milliseconds')}",
+    ]
+    if reason in {"another_worker_refreshed", "already_fresh"}:
+        fields.append(f"reason={reason}")
+    if http_status is not None:
+        fields.append(f"http_status={int(http_status)}")
+    if error_class is not None:
+        safe_error = (
+            error_class
+            if error_class
+            in {
+                "invalid_grant",
+                "invalid_client",
+                "provider_error",
+                "Timeout",
+                "ConnectionError",
+                "RequestException",
+                "InvalidJSON",
+                "MalformedTokenResponse",
+                "TokenWriteError",
+                "MissingRefreshToken",
+                "ReauthorizationRequired",
+            }
+            else "provider_error"
+        )
+        fields.append(f"error_class={safe_error}")
+    _REFRESH_LOGGER.info("schwab_refresh %s", " ".join(fields))
+
+
 def _refresh_tokens(tokens: dict) -> dict:
     with _token_store_lock():
-        if _reauthorization_required():
-            raise SchwabError("Schwab reauthorization required; run `python -m gex_client.login`")
+        _log_refresh_event("refresh_lock_acquired")
         current = load_tokens()
+        _log_refresh_event("post_lock_token_reloaded")
         if isinstance(current, dict) and _access_token_is_fresh(current):
+            reason = (
+                "another_worker_refreshed"
+                if not _access_token_is_fresh(tokens)
+                else "already_fresh"
+            )
+            _log_refresh_event("refresh_skipped_after_lock", reason=reason)
             return current
+        if _reauthorization_required():
+            _log_refresh_event(
+                "refresh_failed", error_class="ReauthorizationRequired"
+            )
+            raise SchwabError("Schwab reauthorization required; run `python -m gex_client.login`")
         current = current if isinstance(current, dict) else tokens
         if not isinstance(current, dict):
+            _log_refresh_event("refresh_failed", error_class="MalformedTokenResponse")
             raise SchwabError("Schwab token state is malformed; run the login command again")
         refresh_token = current.get("refresh_token")
         if not refresh_token:
+            _log_refresh_event("refresh_failed", error_class="MissingRefreshToken")
             raise SchwabError("refresh token is missing; run the login command again")
         client_id, client_secret, _ = _credentials()
-        response = requests.post(
-            TOKEN_URL,
-            headers={
-                "Authorization": _basic_auth_header(client_id, client_secret),
-                "Content-Type": "application/x-www-form-urlencoded",
-            },
-            data={"grant_type": "refresh_token", "refresh_token": refresh_token},
-            timeout=30,
-        )
+        _log_refresh_event("refresh_request_initiated")
+        try:
+            response = requests.post(
+                TOKEN_URL,
+                headers={
+                    "Authorization": _basic_auth_header(client_id, client_secret),
+                    "Content-Type": "application/x-www-form-urlencoded",
+                },
+                data={"grant_type": "refresh_token", "refresh_token": refresh_token},
+                timeout=30,
+            )
+        except requests.Timeout:
+            _log_refresh_event("refresh_failed", error_class="Timeout")
+            raise
+        except requests.ConnectionError:
+            _log_refresh_event("refresh_failed", error_class="ConnectionError")
+            raise
+        except requests.RequestException:
+            _log_refresh_event("refresh_failed", error_class="RequestException")
+            raise
         if not response.ok:
             try:
                 payload = response.json()
             except (TypeError, ValueError):
                 payload = None
             error_name = _oauth_error_name(payload)
+            safe_error = (
+                error_name if error_name in {"invalid_grant", "invalid_client"} else "provider_error"
+            )
+            _log_refresh_event(
+                "refresh_failed", http_status=response.status_code, error_class=safe_error
+            )
             if error_name in {"invalid_grant", "invalid_client"}:
                 record_auth_failure(error_name)
             raise SchwabError(
@@ -237,12 +313,23 @@ def _refresh_tokens(tokens: dict) -> dict:
         try:
             refreshed = response.json()
         except (TypeError, ValueError) as exc:
+            _log_refresh_event(
+                "refresh_failed", http_status=response.status_code, error_class="InvalidJSON"
+            )
             raise SchwabError("Schwab token refresh returned invalid JSON") from exc
         if not isinstance(refreshed, dict) or not refreshed.get("access_token"):
+            _log_refresh_event(
+                "refresh_failed", http_status=response.status_code, error_class="MalformedTokenResponse"
+            )
             raise SchwabError("Schwab token refresh returned malformed token data")
         refreshed.setdefault("refresh_token", refresh_token)
-        _save_tokens_unlocked(refreshed)
+        try:
+            _save_tokens_unlocked(refreshed)
+        except OSError:
+            _log_refresh_event("refresh_failed", error_class="TokenWriteError")
+            raise
         record_refresh_success()
+        _log_refresh_event("refresh_succeeded", http_status=response.status_code)
         return refreshed
 
 

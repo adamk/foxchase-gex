@@ -1,0 +1,106 @@
+--- a/app/schwab_auth.py
++++ b/app/schwab_auth.py
+@@ -3,0 +4 @@
++import logging
+@@ -8,0 +10 @@
++from datetime import datetime, timezone
+@@ -22,0 +25,5 @@
++_REFRESH_LOGGER = logging.getLogger("foxchase.gex.schwab")
++_REFRESH_LOGGER.setLevel(logging.INFO)
++if not _REFRESH_LOGGER.handlers:
++    _REFRESH_LOGGER.addHandler(logging.StreamHandler())
++_REFRESH_LOGGER.propagate = False
+@@ -24,0 +32,35 @@
++def _access_token_is_fresh(tokens, now=None):
++    try:
++        epoch = time.time() if now is None else float(now)
++        saved_at = int(tokens.get("saved_at", 0))
++        expires_in = int(tokens.get("expires_in", 1800))
++        refresh_after_age = max(60, expires_in - 120)
++        return bool(tokens.get("access_token")) and epoch - saved_at <= refresh_after_age
++    except (AttributeError, TypeError, ValueError, OverflowError):
++        return False
++
++
++def _log_refresh_event(event, *, reason=None, http_status=None, error_class=None):
++    fields = [
++        f"event={event}",
++        f"pid={os.getpid()}",
++        f"timestamp={datetime.now(timezone.utc).isoformat(timespec='milliseconds')}",
++    ]
++    if reason in {"another_worker_refreshed", "already_fresh"}:
++        fields.append(f"reason={reason}")
++    if http_status is not None:
++        fields.append(f"http_status={int(http_status)}")
++    if error_class is not None:
++        safe_error = (
++            error_class
++            if error_class in {
++                "invalid_grant", "invalid_client", "provider_error", "Timeout",
++                "ConnectionError", "RequestException", "InvalidJSON",
++                "MalformedTokenResponse", "TokenWriteError", "MissingRefreshToken",
++            }
++            else "provider_error"
++        )
++        fields.append(f"error_class={safe_error}")
++    _REFRESH_LOGGER.info("schwab_refresh %s", " ".join(fields))
++
++
+@@ -110,0 +153 @@
++        _log_refresh_event("refresh_lock_acquired")
+@@ -111,0 +155,9 @@
++        _log_refresh_event("post_lock_token_reloaded")
++        if isinstance(current, dict) and _access_token_is_fresh(current):
++            reason = (
++                "another_worker_refreshed"
++                if not _access_token_is_fresh(tokens)
++                else "already_fresh"
++            )
++            _log_refresh_event("refresh_skipped_after_lock", reason=reason)
++            return current
+@@ -114,0 +167 @@
++            _log_refresh_event("refresh_failed", error_class="MissingRefreshToken")
+@@ -126 +179,12 @@
+-        r = requests.post(TOKEN_URL, headers=headers, data=data, timeout=30)
++        _log_refresh_event("refresh_request_initiated")
++        try:
++            r = requests.post(TOKEN_URL, headers=headers, data=data, timeout=30)
++        except requests.Timeout:
++            _log_refresh_event("refresh_failed", error_class="Timeout")
++            raise
++        except requests.ConnectionError:
++            _log_refresh_event("refresh_failed", error_class="ConnectionError")
++            raise
++        except requests.RequestException:
++            _log_refresh_event("refresh_failed", error_class="RequestException")
++            raise
+@@ -132,0 +197,6 @@
++            safe_error = (
++                error_name if error_name in {"invalid_grant", "invalid_client"} else "provider_error"
++            )
++            _log_refresh_event(
++                "refresh_failed", http_status=r.status_code, error_class=safe_error
++            )
+@@ -135 +205,12 @@
+-        new_tokens = r.json()
++        try:
++            new_tokens = r.json()
++        except (TypeError, ValueError) as exc:
++            _log_refresh_event(
++                "refresh_failed", http_status=r.status_code, error_class="InvalidJSON"
++            )
++            raise RuntimeError("Token refresh returned invalid JSON") from exc
++        if not isinstance(new_tokens, dict) or not new_tokens.get("access_token"):
++            _log_refresh_event(
++                "refresh_failed", http_status=r.status_code, error_class="MalformedTokenResponse"
++            )
++            raise RuntimeError("Token refresh returned malformed token data")
+@@ -138 +219,7 @@
+-        return _save_tokens_unlocked(new_tokens)
++        try:
++            saved = _save_tokens_unlocked(new_tokens)
++        except OSError:
++            _log_refresh_event("refresh_failed", error_class="TokenWriteError")
++            raise
++        _log_refresh_event("refresh_succeeded", http_status=r.status_code)
++        return saved
