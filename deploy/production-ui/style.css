@@ -531,6 +531,25 @@ button:disabled {
   text-underline-offset: 2px;
 }
 
+#operator-reauthorize-link[data-auth-state="healthy"] {
+  padding: 4px 8px;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #bbb;
+  text-decoration: none;
+}
+
+#operator-reauthorize-link[data-auth-state="due_soon"],
+#operator-reauthorize-link[data-auth-state="reauth_required"] {
+  padding: 5px 9px;
+  border: 1px solid #d8bf00;
+  border-radius: 4px;
+  background: #d8bf00;
+  color: #111;
+  font-weight: 700;
+  text-decoration: none;
+}
+
 .operator-auth-logout {
   margin-left: auto;
   color: #aaa;

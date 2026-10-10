@@ -31,9 +31,9 @@ def test_production_ui_source_manifest_matches_files():
 
 
 def test_production_ui_source_has_reviewed_final_hashes():
-    assert sha256(PRODUCTION_UI / "index.html") == "9d10a3692407dda7f3d22fa32bdf5c77e01092861c5a48998180183f07022408"
-    assert sha256(PRODUCTION_UI / "app.js") == "072724c0cfa035c9750eae3ec84df894bc415b39b54823ab34f1d07adddbe356"
-    assert sha256(PRODUCTION_UI / "style.css") == "dbcabbbb051bf5a15ef81c54e4bb18f2b4bf91c47aef536afd85470e3f1b94ad"
+    assert sha256(PRODUCTION_UI / "index.html") == "a012c223af3dd783f4a60cb3e6c176aa61a797dc586b0f73327a3a0dfacd99aa"
+    assert sha256(PRODUCTION_UI / "app.js") == "742a3fdec90f405708f5513f970723b535057fb0e2ad02b5fd64c82612636eaa"
+    assert sha256(PRODUCTION_UI / "style.css") == "24a698cf981b062b1e81446cf26525546e03b244a3a140831c367768b4a72789"
 
 
 def test_release_manifest_matches_exact_source_set_and_checksums():

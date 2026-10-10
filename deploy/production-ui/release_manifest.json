@@ -1,5 +1,5 @@
 {
-  "release_id": "foxchase-gex-production-ui-20261008-schwab-operator-status",
+  "release_id": "foxchase-gex-production-ui-20261010-operator-reauth-button",
   "source_root": "deploy/production-ui",
   "service": "foxchase-gex.service",
   "targets": {
@@ -8,9 +8,9 @@
     "style.css": "/opt/foxchase-gex/static/css/style.css"
   },
   "sha256": {
-    "index.html": "9d10a3692407dda7f3d22fa32bdf5c77e01092861c5a48998180183f07022408",
-    "app.js": "072724c0cfa035c9750eae3ec84df894bc415b39b54823ab34f1d07adddbe356",
-    "style.css": "dbcabbbb051bf5a15ef81c54e4bb18f2b4bf91c47aef536afd85470e3f1b94ad"
+    "index.html": "a012c223af3dd783f4a60cb3e6c176aa61a797dc586b0f73327a3a0dfacd99aa",
+    "app.js": "742a3fdec90f405708f5513f970723b535057fb0e2ad02b5fd64c82612636eaa",
+    "style.css": "24a698cf981b062b1e81446cf26525546e03b244a3a140831c367768b4a72789"
   },
   "api_checks": [
     "https://gex.foxchasetrading.com/",

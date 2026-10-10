@@ -454,18 +454,17 @@ async function loadOperatorAuthStatus() {
 
     if (status.state === "healthy") {
       label.textContent = "Schwab auth · " + formatRemainingAuthTime(status.remaining_seconds);
-      reauthorize.hidden = true;
     } else if (status.state === "due_soon") {
       label.textContent = "Schwab auth · Reauthorize soon";
-      reauthorize.hidden = false;
     } else if (status.state === "reauth_required") {
       label.textContent = "Schwab auth · Reauthorization required";
-      reauthorize.hidden = false;
     } else {
       hideOperatorAuthStatus();
       return;
     }
     reauthorize.href = "/operator/reauthorize-schwab";
+    reauthorize.dataset.authState = status.state;
+    reauthorize.hidden = false;
     reauthorize.target = "_blank";
     reauthorize.rel = "noopener noreferrer";
     logout.href = "/operator/logout";
