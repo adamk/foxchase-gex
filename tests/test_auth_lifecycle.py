@@ -131,6 +131,7 @@ def test_successful_full_oauth_exchange_resets_lifecycle(monkeypatch, tmp_path):
             return {"access_token": "new-access", "refresh_token": "new-refresh", "expires_in": 1800}
 
     monkeypatch.setattr(schwab.requests, "post", lambda *a, **k: Response())
+    monkeypatch.setattr(schwab.requests, "get", lambda *a, **k: AuthenticatedQuoteResponse())
     schwab.exchange_authorization_response("one-time-code")
 
     lifecycle = json.loads((tmp_path / "lifecycle.json").read_text(encoding="utf-8"))
@@ -164,6 +165,7 @@ def test_existing_oauth_exchange_reads_gui_stored_credentials(monkeypatch, tmp_p
         return Response()
 
     monkeypatch.setattr(schwab.requests, "post", post)
+    monkeypatch.setattr(schwab.requests, "get", lambda *a, **k: AuthenticatedQuoteResponse())
     oauth_state = "state-value-for-this-gui-attempt-0123456789"
     authorize_url = schwab.authorization_url(state=oauth_state)
     assert parse_qs(urlparse(authorize_url).query)["state"] == [oauth_state]
@@ -179,6 +181,14 @@ def test_existing_oauth_exchange_reads_gui_stored_credentials(monkeypatch, tmp_p
     assert seen["headers"]["Authorization"].startswith("Basic ")
     assert token_file.exists()
     assert json.loads((tmp_path / "lifecycle.json").read_text())["next_reauth_due_at"]
+
+
+class AuthenticatedQuoteResponse:
+    ok = True
+    status_code = 200
+
+    def json(self):
+        return {"$SPX": {"quote": {"symbol": "$SPX"}}}
 
 
 def test_oauth_exchange_rejects_missing_or_wrong_state_before_network_call(monkeypatch, tmp_path):

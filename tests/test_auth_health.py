@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 
 import pytest
 
-from gex_client import auth_health
+from gex_client import auth_health, auth_lifecycle
 from gex_client import schwab
 
 
@@ -326,7 +326,7 @@ def test_repeated_auth_failures_remain_required(monkeypatch, tmp_path):
     assert state["failure_detected_at"] == auth_health._iso(first)
 
 
-def test_oauth_exchange_waits_for_authenticated_validation(monkeypatch, tmp_path):
+def test_full_oauth_auth_probe_clears_latched_failure_before_empty_chain(monkeypatch, tmp_path):
     configure(monkeypatch, tmp_path)
     monkeypatch.setattr(auth_health.time, "time", lambda: 1050)
     monkeypatch.setenv("SCHWAB_CLIENT_ID", "client")
@@ -340,12 +340,76 @@ def test_oauth_exchange_waits_for_authenticated_validation(monkeypatch, tmp_path
         def json(self):
             return {"access_token": "new-access", "refresh_token": "new-refresh", "expires_in": 1800}
 
+    authenticated_requests = []
+
+    class QuoteResponse:
+        ok = True
+        status_code = 200
+
+        def json(self):
+            return {"$SPX": {"quote": {"symbol": "$SPX"}}}
+
+    def get(url, **kwargs):
+        authenticated_requests.append((url, kwargs))
+        return QuoteResponse()
+
     monkeypatch.setattr(schwab.requests, "post", lambda *a, **k: Response())
+    monkeypatch.setattr(schwab.requests, "get", get)
     schwab.exchange_authorization_response("authorization-code")
-    pending = auth_health.load_status()
-    assert pending["health"] == "reauthorization_required"
-    assert "pending_interactive_authorized_at" in pending
-    assert auth_health.record_authenticated_success(1100)["health"] == "healthy"
+
+    status = auth_health.load_status()
+    assert authenticated_requests[0][0].endswith("/quotes")
+    assert authenticated_requests[0][1]["params"] == {"symbols": "$SPX"}
+    assert status["health"] == "healthy"
+    assert status["last_failure_class"] is None
+    assert "pending_interactive_authorized_at" not in status
+    assert auth_lifecycle.load_lifecycle() == {
+        "last_full_oauth_at": auth_health._iso(1050),
+        "next_reauth_due_at": auth_health._iso(1050 + 7 * 86400),
+    }
+
+    with pytest.raises(schwab.SchwabError, match="no 0DTE contracts"):
+        schwab.sanitize_chains(
+            "SPX",
+            {"underlyingPrice": 6000, "callExpDateMap": {}},
+            {"underlyingPrice": 6000, "putExpDateMap": {}},
+            expiration="2026-10-10",
+        )
+    assert auth_health.load_status()["health"] == "healthy"
+
+
+def test_failed_authenticated_probe_keeps_invalid_grant_latched(monkeypatch, tmp_path):
+    configure(monkeypatch, tmp_path)
+    monkeypatch.setattr(auth_health.time, "time", lambda: 1050)
+    monkeypatch.setenv("SCHWAB_CLIENT_ID", "client")
+    monkeypatch.setenv("SCHWAB_CLIENT_SECRET", "secret")
+    original_lifecycle = auth_lifecycle.record_full_oauth_authorization(900)
+    auth_health.record_auth_failure("invalid_grant", 1000)
+
+    class TokenResponse:
+        ok = True
+        status_code = 200
+
+        def json(self):
+            return {"access_token": "new-access", "refresh_token": "new-refresh", "expires_in": 1800}
+
+    class QuoteResponse:
+        ok = False
+        status_code = 401
+
+        def json(self):
+            return {"error": "unauthorized"}
+
+    monkeypatch.setattr(schwab.requests, "post", lambda *a, **k: TokenResponse())
+    monkeypatch.setattr(schwab.requests, "get", lambda *a, **k: QuoteResponse())
+
+    with pytest.raises(schwab.SchwabError, match="Schwab authenticated request failed"):
+        schwab.exchange_authorization_response("authorization-code")
+
+    status = auth_health.load_status()
+    assert status["health"] == "reauthorization_required"
+    assert status["last_failure_class"] == "invalid_grant"
+    assert auth_lifecycle.load_lifecycle() == original_lifecycle
 
 
 def test_validated_request_does_not_bypass_expired_interactive_deadline(monkeypatch, tmp_path):

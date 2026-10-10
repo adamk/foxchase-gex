@@ -10,6 +10,7 @@ import pytest
 ROOT = Path(__file__).parents[1]
 PRODUCTION_UI = ROOT / "deploy" / "production-ui"
 DEPLOY_SCRIPT = ROOT / "deploy" / "deploy_production_ui.sh"
+HEALTH_HELPER = ROOT / "deploy" / "production_ui_health.py"
 DOM_HARNESS = ROOT / "tests" / "test_dom_harness.js"
 
 
@@ -93,6 +94,14 @@ def test_deployment_dry_run_is_read_only_and_maps_only_three_files():
     assert "> /SHA256SUMS" not in script
     assert ">> /SHA256SUMS" not in script
     assert '"${backup_dir}/SHA256SUMS"' in script
+    assert f'python3 "${{HEALTH_HELPER}}"' in script
+    assert HEALTH_HELPER.is_file()
+    assert '--asset-manifest "${manifest}"' in script
+    assert 'health_check "${BASELINE_MANIFEST}"' in script
+    assert 'health_check "${SOURCE_MANIFEST}"' in script
+    assert script.index('health_check "${BASELINE_MANIFEST}"') < script.index(
+        'install -d -o root -g root -m 0750 "${BACKUP_ROOT}"'
+    )
 
 
 def test_production_ui_preserves_final_density_and_chart_classification_read():

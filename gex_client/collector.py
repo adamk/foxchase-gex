@@ -20,7 +20,7 @@ from gex_client.auth_health import (
 )
 from gex_client.forward_audit import archive_forward_audit
 from gex_client.health import record_attempt
-from gex_client.schwab import fetch_sanitized_snapshot, get_access_token
+from gex_client.schwab import fetch_sanitized_snapshot, validate_authenticated_connection
 
 
 NY = ZoneInfo("America/New_York")
@@ -130,7 +130,7 @@ def main() -> None:
                 print(f"{now.isoformat(timespec='seconds')} [GEXAlert] reauthorization required before market open", flush=True)
             else:
                 try:
-                    get_access_token()
+                    validate_authenticated_connection()
                     terminal_auth_failure = False
                     emit_due_alert()
                     emit_recovery_if_pending()

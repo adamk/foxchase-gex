@@ -1,4 +1,6 @@
-from gex_client.schwab import sanitize_chains
+import pytest
+
+from gex_client.schwab import SchwabError, sanitize_chains
 
 
 def test_sanitized_payload_contains_no_credentials_or_contract_symbols():
@@ -65,3 +67,14 @@ def test_schwab_sentinel_values_are_normalized_before_private_api():
     contract = payload["contracts"][0]
     assert contract["gamma"] == 0.0
     assert contract["volatility"] == 0.0
+
+
+def test_weekday_empty_0dte_chain_remains_a_data_problem():
+    expiration = "2026-10-13"
+    with pytest.raises(SchwabError, match="no 0DTE contracts"):
+        sanitize_chains(
+            "SPX",
+            {"underlyingPrice": 6000, "callExpDateMap": {}},
+            {"underlyingPrice": 6000, "putExpDateMap": {}},
+            expiration,
+        )

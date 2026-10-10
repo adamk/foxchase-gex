@@ -234,11 +234,19 @@ def test_callback_uses_existing_exchange_and_redirects_to_connected_dashboard(
                 "expires_in": 1800,
             }
 
+    class QuoteResponse:
+        ok = True
+        status_code = 200
+
+        def json(self):
+            return {"$SPX": {"quote": {"symbol": "$SPX"}}}
+
     def provider_post(url, **kwargs):
         provider_calls.append((url, kwargs))
         return ProviderResponse()
 
     monkeypatch.setattr(schwab.requests, "post", provider_post)
+    monkeypatch.setattr(schwab.requests, "get", lambda *args, **kwargs: QuoteResponse())
     authorize = client.get("/operator/reauthorize-schwab")
     expected_state = parse_qs(urlparse(authorize.headers["Location"]).query)["state"][0]
     page = client.get("/setup")

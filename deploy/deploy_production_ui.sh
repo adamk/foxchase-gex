@@ -10,6 +10,8 @@ SITE_URL="https://gex.foxchasetrading.com"
 API_ROOT="${SITE_URL}/api/gex"
 SOURCE_MANIFEST="${SOURCE_DIR}/SHA256SUMS"
 BASELINE_MANIFEST="${SOURCE_DIR}/production-baseline.SHA256SUMS"
+HEALTH_HELPER="${SCRIPT_DIR}/production_ui_health.py"
+AUTH_DATA_ROOT="/opt/foxchase-authority-runtime/rootfs/var/lib/foxchase-gex"
 
 SOURCE_TEMPLATE="${SOURCE_DIR}/index.html"
 SOURCE_SCRIPT="${SOURCE_DIR}/app.js"
@@ -37,6 +39,7 @@ validate_source() {
   [[ -f "${SOURCE_SCRIPT}" ]] || die "missing ${SOURCE_SCRIPT}"
   [[ -f "${SOURCE_STYLES}" ]] || die "missing ${SOURCE_STYLES}"
   [[ -f "${SOURCE_MANIFEST}" ]] || die "missing ${SOURCE_MANIFEST}"
+  [[ -f "${HEALTH_HELPER}" ]] || die "missing ${HEALTH_HELPER}"
   (cd "${SOURCE_DIR}" && sha256sum -c "${SOURCE_MANIFEST}") || die "source hash validation failed"
 }
 
@@ -66,9 +69,15 @@ restore_backup() {
 }
 
 health_check() {
-  curl --fail --silent --show-error --output /dev/null --max-time 20 "${SITE_URL}"
-  curl --fail --silent --show-error --output /dev/null --max-time 20 "${API_ROOT}/NDX"
-  curl --fail --silent --show-error --output /dev/null --max-time 20 "${API_ROOT}/SPX"
+  local manifest="$1"
+  python3 "${HEALTH_HELPER}" \
+    --site-url "${SITE_URL}" \
+    --api-root "${API_ROOT}" \
+    --local-url "http://127.0.0.1:5055/" \
+    --token-path "${AUTH_DATA_ROOT}/schwab_tokens.json" \
+    --asset-root "${TARGET_ROOT}/static" \
+    --asset-manifest "${manifest}" \
+    --service "${SERVICE}"
 }
 
 validate_source
@@ -87,6 +96,9 @@ fi
 
 # Drift gate: only exact recorded production UI baseline may be replaced.
 sha256sum -c "${BASELINE_MANIFEST}" || die "production UI baseline drifted"
+
+# Run the full read-only gate before creating a backup or changing any asset.
+health_check "${BASELINE_MANIFEST}"
 
 install -d -o root -g root -m 0750 "${BACKUP_ROOT}"
 timestamp="$(date -u +%Y%m%dT%H%M%SZ)"
@@ -128,7 +140,7 @@ if (( RESTART )); then
   systemctl restart "${SERVICE}"
 fi
 systemctl is-active --quiet "${SERVICE}"
-health_check
+health_check "${SOURCE_MANIFEST}"
 
 trap - ERR
 echo "Deployment PASS"

@@ -34,17 +34,32 @@ deploy/deploy_production_ui.sh
 
 Script:
 
-1. validates source hashes and exact current production baseline;
-2. creates `/opt/foxchase-gex/ui-backups/<UTC timestamp>/`;
-3. backs up all three files and writes `SHA256SUMS` inside that directory;
-4. installs exactly mapped files, preserving target owner/group/mode;
-5. checks production site and both GEX API endpoints;
-6. restores verified backup automatically if post-install validation fails.
+1. validates reviewed source hashes, exact production paths, and the current
+   production asset baseline;
+2. runs the read-only health gate against the current production hashes;
+3. creates `/opt/foxchase-gex/ui-backups/<UTC timestamp>/`, copies all three
+   current UI files, and verifies the backup `SHA256SUMS`;
+4. installs exactly the three mapped UI files, preserving target owner, group,
+   and mode;
+5. verifies installed hashes against the release manifest and repeats the
+   health gate;
+6. requires NDX and SPX GEX HTTP 200 during weekday trading validation. On a
+   weekend or recognized US equity market holiday, the gate accepts only the
+   exact missing-spot response after authenticated Schwab CALL and PUT chain
+   requests confirm empty same-day expiry groups. Backend errors, compute
+   failures, service failures, auth failures, or nonempty chains still block;
+7. restores the verified backup automatically if post-install validation fails.
+
+The health gate checks active GEX and compute services, public and local roots,
+served CSS/JavaScript, production asset hashes, healthy Schwab lifecycle
+metadata and remaining time, an authenticated Schwab quotes request, and fresh
+service logs. The current production app does not expose `/api/health`, so the
+gate does not depend on that route.
 
 Static templates/assets are read from disk per request, so no service restart
 normally required. Use `--restart` only when proven runtime/cache reason
 requires it; it restarts `foxchase-gex.service` only.
 
-Script never writes root-level `/SHA256SUMS`, touches Schwab tokens, or changes
+Script never writes root-level `/SHA256SUMS`, modifies Schwab tokens, or changes
 backend/auth/systemd configuration. Review baseline and backup output before
 production deployment.

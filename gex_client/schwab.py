@@ -22,6 +22,7 @@ from dotenv import load_dotenv
 from gex_client.auth_health import (
     authorization_state,
     load_status,
+    record_authenticated_success,
     record_auth_failure,
     record_pending_interactive_authorization,
     record_refresh_success,
@@ -195,14 +196,15 @@ def exchange_authorization_response(value: str, expected_state: str | None = Non
             failure_class="provider_error",
         ) from exc
     try:
+        oauth_completed_at = time.time()
         save_tokens(tokens)
-        record_pending_interactive_authorization()
-        record_full_oauth_authorization()
+        record_pending_interactive_authorization(oauth_completed_at)
     except OSError as exc:
         raise SchwabError(
             "authorization succeeded, but local authorization state could not be saved",
             failure_class="local_save_error",
         ) from exc
+    validate_authenticated_connection()
     return tokens
 
 
@@ -386,6 +388,51 @@ def get_access_token() -> str:
     if not access_token:
         raise SchwabError("local Schwab token file has no access token")
     return str(access_token)
+
+
+def validate_authenticated_connection(now: float | None = None) -> dict:
+    """Validate auth through harmless market data, independent of 0DTE chains."""
+    try:
+        response = requests.get(
+            f"{MARKET_DATA_BASE}/quotes",
+            headers={"Authorization": f"Bearer {get_access_token()}", "Accept": "application/json"},
+            params={"symbols": "$SPX"},
+            timeout=20,
+        )
+    except requests.RequestException as exc:
+        raise SchwabError("Schwab authenticated request failed") from exc
+    if not response.ok:
+        raise SchwabError(
+            f"Schwab authenticated request failed ({response.status_code})"
+        )
+    try:
+        payload = response.json()
+    except (TypeError, ValueError) as exc:
+        raise SchwabError("Schwab authenticated request returned invalid JSON") from exc
+    if not isinstance(payload, dict):
+        raise SchwabError("Schwab authenticated request returned an invalid response")
+    pending = load_status().get("pending_interactive_authorized_at")
+    if pending:
+        try:
+            pending_time = datetime.fromisoformat(
+                str(pending).replace("Z", "+00:00")
+            )
+            if pending_time.tzinfo is None:
+                raise ValueError("timezone missing")
+            pending_epoch = pending_time.timestamp()
+        except (TypeError, ValueError, OverflowError) as exc:
+            raise SchwabError("pending full-OAuth timestamp is invalid") from exc
+        validation_epoch = time.time() if now is None else float(now)
+        if pending_epoch > validation_epoch:
+            raise SchwabError("pending full-OAuth timestamp is in the future")
+        try:
+            record_full_oauth_authorization(pending_epoch)
+        except OSError as exc:
+            raise SchwabError(
+                "authenticated request succeeded, but full-OAuth lifecycle state could not be saved",
+                failure_class="local_save_error",
+            ) from exc
+    return record_authenticated_success(now)
 
 
 def _safe_float(value, default=0.0) -> float:
