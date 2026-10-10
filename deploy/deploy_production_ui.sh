@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 SOURCE_DIR="${SCRIPT_DIR}/production-ui"
-TARGET_ROOT="/opt/foxchase-gex"
+TARGET_ROOT="/opt/foxchase-authority-runtime/rootfs/opt/foxchase-gex"
 BACKUP_ROOT="${TARGET_ROOT}/ui-backups"
 SERVICE="foxchase-gex.service"
 SITE_URL="https://gex.foxchasetrading.com"

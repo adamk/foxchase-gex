@@ -2,6 +2,7 @@
   "release_id": "foxchase-gex-production-ui-20261010-operator-reauth-button",
   "source_root": "deploy/production-ui",
   "service": "foxchase-gex.service",
+  "host_backing_root": "/opt/foxchase-authority-runtime/rootfs/opt/foxchase-gex",
   "targets": {
     "index.html": "/opt/foxchase-gex/static/templates/index.html",
     "app.js": "/opt/foxchase-gex/static/js/app.js",

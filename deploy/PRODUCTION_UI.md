@@ -12,6 +12,13 @@ Git checkout.
 | `deploy/production-ui/app.js` | `/opt/foxchase-gex/static/js/app.js` |
 | `deploy/production-ui/style.css` | `/opt/foxchase-gex/static/css/style.css` |
 
+On the current Linode, systemd bind-mounts the application tree read-only into
+the service namespace. The writable host backing tree is
+`/opt/foxchase-authority-runtime/rootfs/opt/foxchase-gex`; the deployment
+script writes only the three mapped assets there, which the service sees at
+the logical paths in the table. The production baseline pins those backing
+files and must match before a deployment.
+
 `SHA256SUMS` verifies reviewed source. `production-baseline.SHA256SUMS` is
 expected current production state and provides drift protection. Update that
 baseline only as part of separately reviewed UI release.

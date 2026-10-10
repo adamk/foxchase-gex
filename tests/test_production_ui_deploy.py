@@ -50,6 +50,23 @@ def test_release_manifest_matches_exact_source_set_and_checksums():
         "app.js": "/opt/foxchase-gex/static/js/app.js",
         "style.css": "/opt/foxchase-gex/static/css/style.css",
     }
+    assert manifest["host_backing_root"] == "/opt/foxchase-authority-runtime/rootfs/opt/foxchase-gex"
+
+
+def test_production_deploy_guard_targets_verified_host_backing_tree():
+    script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
+    baseline = {}
+    for line in (PRODUCTION_UI / "production-baseline.SHA256SUMS").read_text().splitlines():
+        digest, path = line.split(maxsplit=1)
+        baseline[path] = digest
+
+    backing = "/opt/foxchase-authority-runtime/rootfs/opt/foxchase-gex"
+    assert f'TARGET_ROOT="{backing}"' in script
+    assert baseline == {
+        f"{backing}/static/templates/index.html": "9d10a3692407dda7f3d22fa32bdf5c77e01092861c5a48998180183f07022408",
+        f"{backing}/static/js/app.js": "072724c0cfa035c9750eae3ec84df894bc415b39b54823ab34f1d07adddbe356",
+        f"{backing}/static/css/style.css": "dbcabbbb051bf5a15ef81c54e4bb18f2b4bf91c47aef536afd85470e3f1b94ad",
+    }
 
 
 def test_ndx_viewport_harness():
@@ -71,7 +88,7 @@ def test_deployment_dry_run_is_read_only_and_maps_only_three_files():
     )
     assert result.returncode == 0, result.stderr
     assert "DRY RUN: no production changes" in result.stdout
-    assert result.stdout.count(" -> /opt/foxchase-gex/static/") == 3
+    assert result.stdout.count(" -> /opt/foxchase-authority-runtime/rootfs/opt/foxchase-gex/static/") == 3
     script = DEPLOY_SCRIPT.read_text(encoding="utf-8")
     assert "> /SHA256SUMS" not in script
     assert ">> /SHA256SUMS" not in script
