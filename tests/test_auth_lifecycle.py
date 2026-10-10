@@ -1,4 +1,5 @@
 import json
+import os
 from datetime import datetime, timezone
 from urllib.parse import parse_qs, urlparse
 
@@ -137,7 +138,8 @@ def test_successful_full_oauth_exchange_resets_lifecycle(monkeypatch, tmp_path):
     assert lifecycle["last_full_oauth_at"] == auth_health._iso(start + 3 * 86400)
     assert lifecycle["next_reauth_due_at"] == auth_health._iso(start + 10 * 86400)
     assert token_file.exists()
-    assert (tmp_path / "lifecycle.json").stat().st_mode & 0o777 == 0o600
+    if os.name == "posix":
+        assert (tmp_path / "lifecycle.json").stat().st_mode & 0o777 == 0o600
 
 
 def test_existing_oauth_exchange_reads_gui_stored_credentials(monkeypatch, tmp_path):

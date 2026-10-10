@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import base64
-import fcntl
 import hmac
 import json
 import logging
@@ -28,7 +27,9 @@ from gex_client.auth_health import (
     record_refresh_success,
 )
 from gex_client.auth_lifecycle import record_full_oauth_authorization
+from gex_client.file_lock import exclusive_file_lock
 from gex_client.local_setup import CredentialStoreError, configured_credentials
+from gex_client.secure_storage import apply_private_file_mode
 
 
 load_dotenv()
@@ -86,14 +87,8 @@ def _token_store_lock():
     destination = token_path()
     destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     lock_path = destination.with_name(destination.name + ".lock")
-    lock_path.touch(mode=0o600, exist_ok=True)
-    os.chmod(lock_path, 0o600)
-    with lock_path.open("r+", encoding="utf-8") as lock:
-        fcntl.flock(lock.fileno(), fcntl.LOCK_EX)
-        try:
-            yield
-        finally:
-            fcntl.flock(lock.fileno(), fcntl.LOCK_UN)
+    with exclusive_file_lock(lock_path):
+        yield
 
 
 def _save_tokens_unlocked(tokens: dict) -> None:
@@ -105,8 +100,8 @@ def _save_tokens_unlocked(tokens: dict) -> None:
         dir=destination.parent, prefix=".schwab_tokens.", text=True
     )
     try:
-        os.fchmod(handle, 0o600)
         with os.fdopen(handle, "w", encoding="utf-8") as stream:
+            apply_private_file_mode(stream.fileno())
             json.dump(payload, stream, indent=2)
             stream.write("\n")
             stream.flush()

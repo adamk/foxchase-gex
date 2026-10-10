@@ -1,4 +1,5 @@
 import json
+import os
 
 import pytest
 
@@ -19,8 +20,9 @@ def test_credentials_are_stored_atomically_with_private_permissions(monkeypatch,
         "client_secret": "app-secret",
         "redirect_uri": "https://127.0.0.1",
     }
-    assert path.stat().st_mode & 0o777 == 0o600
-    assert path.parent.stat().st_mode & 0o777 == 0o700
+    if os.name == "posix":
+        assert path.stat().st_mode & 0o777 == 0o600
+        assert path.parent.stat().st_mode & 0o777 == 0o700
     assert set(json.loads(path.read_text())) == {"client_id", "client_secret", "redirect_uri"}
 
 
@@ -38,6 +40,7 @@ def test_environment_credentials_take_precedence_over_local_file(monkeypatch, tm
     assert local_setup.credential_status()["source"] == "environment"
 
 
+@pytest.mark.skipif(os.name != "posix", reason="POSIX permission bits are not Windows ACLs")
 def test_credentials_loader_rejects_a_relaxed_parent_directory(monkeypatch, tmp_path):
     path = tmp_path / "private" / "schwab_credentials.json"
     monkeypatch.setenv("SCHWAB_CREDENTIALS_PATH", str(path))
@@ -67,8 +70,9 @@ def test_session_secret_is_created_once_with_private_permissions(monkeypatch, tm
 
     assert len(first) >= 32
     assert second == first
-    assert path.stat().st_mode & 0o777 == 0o600
-    assert path.parent.stat().st_mode & 0o777 == 0o700
+    if os.name == "posix":
+        assert path.stat().st_mode & 0o777 == 0o600
+        assert path.parent.stat().st_mode & 0o777 == 0o700
 
 
 @pytest.mark.parametrize(

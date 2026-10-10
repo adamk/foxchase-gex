@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from gex_client.auth_health import REAUTHORIZATION_LIFETIME_SECONDS, load_status
+from gex_client.secure_storage import apply_private_file_mode
 
 
 FIELDS = ("last_full_oauth_at", "next_reauth_due_at")
@@ -49,8 +50,8 @@ def _atomic_write(value: dict) -> None:
         dir=destination.parent, prefix=".schwab-lifecycle-", text=True
     )
     try:
-        os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            apply_private_file_mode(stream.fileno())
             json.dump(value, stream, sort_keys=True)
             stream.write("\n")
             stream.flush()

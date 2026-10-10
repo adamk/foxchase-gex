@@ -46,6 +46,22 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Windows setup
+
+Install Python 3.9 or newer, then use PowerShell from the repository folder:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -e .
+python run.py
+```
+
+In Command Prompt, activate with `.venv\Scripts\activate.bat`. Open
+[http://127.0.0.1:8765](http://127.0.0.1:8765) after the local server starts.
+The package installs the cross-process token lock and Windows timezone data
+automatically; no manual locking setup is needed.
+
 ## 3. Connect Schwab in the local dashboard
 
 Start Foxchase GEX:
@@ -60,8 +76,12 @@ your Schwab developer app; the redirect URI defaults to `https://127.0.0.1` and
 must exactly match the callback registered with Schwab.
 
 Choose **Save & Connect Schwab**. Foxchase GEX saves these credentials on your
-computer in `~/.foxchase-gex/schwab_credentials.json` with file mode `0600` in a
-user-only `0700` directory, then opens the existing Schwab authorization flow.
+computer in `~/.foxchase-gex/schwab_credentials.json`, then opens the existing
+Schwab authorization flow. On Linux and macOS, the file and directory use
+`0600` and `0700` permissions. On Windows, the files inherit the ACL of the
+user-profile configuration directory because Windows does not expose equivalent
+POSIX mode bits; keep any custom configuration directory under a private user
+profile path.
 The secret is submitted only to this local app and to Schwab's token endpoint;
 it is not returned to the browser after saving and is not sent to Foxchase
 Trading. Foxchase GEX also creates a local session-signing secret in the same

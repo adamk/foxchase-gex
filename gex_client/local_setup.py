@@ -10,6 +10,8 @@ import tempfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from gex_client import secure_storage
+
 
 DEFAULT_REDIRECT_URI = "https://127.0.0.1"
 _CREDENTIAL_FIELDS = {"client_id", "client_secret", "redirect_uri"}
@@ -46,7 +48,7 @@ def _ensure_private_parent(path: Path) -> None:
         raise CredentialStoreError("local configuration directory is unavailable") from exc
     if hasattr(os, "getuid") and info.st_uid != os.getuid():
         raise CredentialStoreError("local configuration directory must be owned by this user")
-    if stat.S_IMODE(info.st_mode) & 0o077:
+    if secure_storage.POSIX_MODE_BITS and stat.S_IMODE(info.st_mode) & 0o077:
         raise CredentialStoreError("local configuration directory must have mode 0700")
 
 
@@ -103,7 +105,7 @@ def load_credentials() -> dict | None:
         raise CredentialStoreError("local credential file must be a regular file")
     if hasattr(os, "getuid") and info.st_uid != os.getuid():
         raise CredentialStoreError("local credential file must be owned by this user")
-    if stat.S_IMODE(info.st_mode) & 0o077:
+    if not secure_storage.has_private_mode(path, 0o077):
         raise CredentialStoreError("local credential file must have mode 0600")
     try:
         value = json.loads(path.read_text(encoding="utf-8"))
@@ -133,19 +135,15 @@ def save_credentials(client_id: str, client_secret: str, redirect_uri: str) -> d
         dir=path.parent, prefix=".schwab-credentials-", text=True
     )
     try:
-        os.fchmod(descriptor, 0o600)
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            secure_storage.apply_private_file_mode(stream.fileno())
             json.dump(value, stream, sort_keys=True)
             stream.write("\n")
             stream.flush()
             os.fsync(stream.fileno())
         os.replace(temporary_name, path)
-        os.chmod(path, 0o600)
-        directory_fd = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+        secure_storage.apply_private_path_mode(path)
+        secure_storage.sync_directory(path.parent)
     except OSError as exc:
         raise CredentialStoreError("local credentials could not be saved securely") from exc
     finally:
@@ -208,7 +206,7 @@ def get_or_create_session_secret() -> str:
                 stat.S_ISLNK(info.st_mode)
                 or not stat.S_ISREG(info.st_mode)
                 or (hasattr(os, "getuid") and info.st_uid != os.getuid())
-                or stat.S_IMODE(info.st_mode) & 0o077
+                or not secure_storage.has_private_mode(path, 0o077)
             ):
                 raise CredentialStoreError("local session secret must be a private mode-0600 file")
             value = path.read_text(encoding="utf-8").strip()
@@ -223,14 +221,11 @@ def get_or_create_session_secret() -> str:
     value = secrets.token_urlsafe(48)
     try:
         with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+            secure_storage.apply_private_file_mode(stream.fileno())
             stream.write(value + "\n")
             stream.flush()
             os.fsync(stream.fileno())
-        directory_fd = os.open(path.parent, os.O_RDONLY)
-        try:
-            os.fsync(directory_fd)
-        finally:
-            os.close(directory_fd)
+        secure_storage.sync_directory(path.parent)
     except OSError as exc:
         try:
             path.unlink(missing_ok=True)

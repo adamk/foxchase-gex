@@ -11,6 +11,8 @@ from pathlib import Path
 
 import requests
 
+from gex_client.secure_storage import apply_private_file_mode
+
 
 # Schwab Trader API OAuth documentation: access tokens are valid for 30 minutes;
 # refresh tokens have a non-sliding seven-day lifetime from interactive grant.
@@ -43,8 +45,8 @@ def _write(value: dict) -> None:
     destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
     fd, temporary = tempfile.mkstemp(dir=destination.parent, prefix=".auth-health-", text=True)
     try:
-        os.fchmod(fd, 0o600)
         with os.fdopen(fd, "w", encoding="utf-8") as stream:
+            apply_private_file_mode(stream.fileno())
             json.dump(value, stream, indent=2, sort_keys=True)
             stream.write("\n")
             stream.flush()

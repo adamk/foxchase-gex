@@ -151,7 +151,8 @@ schwab._refresh_tokens(initial)
     stored = json.loads(token_path.read_text(encoding="utf-8"))
     assert stored["access_token"] == "fresh-access-sentinel"
     assert stored["refresh_token"] == "fresh-refresh-sentinel"
-    assert token_path.with_name("tokens.json.lock").stat().st_mode & 0o777 == 0o600
+    if os.name == "posix":
+        assert token_path.with_name("tokens.json.lock").stat().st_mode & 0o777 == 0o600
 
 
 def test_still_expired_after_lock_posts_once(monkeypatch, tmp_path):
@@ -223,8 +224,53 @@ def test_token_replacement_remains_atomic_and_private(monkeypatch, tmp_path):
     )
 
     assert token_path.stat().st_ino != previous_inode
-    assert token_path.stat().st_mode & 0o777 == 0o600
+    if os.name == "posix":
+        assert token_path.stat().st_mode & 0o777 == 0o600
     assert not list(tmp_path.glob(".schwab_tokens.*"))
+
+
+def test_token_lock_is_released_after_exception(monkeypatch, tmp_path):
+    token_path = configure(monkeypatch, tmp_path)
+    acquired_path = tmp_path / "second-process-acquired"
+    repo_root = Path(__file__).resolve().parents[1]
+    worker = """
+import os
+from pathlib import Path
+from gex_client.schwab import _token_store_lock
+with _token_store_lock():
+    Path(os.environ["FOXCHASE_TEST_ACQUIRED_PATH"]).write_text("yes", encoding="utf-8")
+"""
+    env = os.environ.copy()
+    env.update(
+        {
+            "PYTHONPATH": str(repo_root),
+            "SCHWAB_TOKEN_PATH": str(token_path),
+            "FOXCHASE_TEST_ACQUIRED_PATH": str(acquired_path),
+        }
+    )
+    process = None
+    try:
+        with pytest.raises(RuntimeError, match="release lock"):
+            with schwab._token_store_lock():
+                process = subprocess.Popen(
+                    [sys.executable, "-c", worker],
+                    cwd=repo_root,
+                    env=env,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                )
+                time.sleep(0.3)
+                assert not acquired_path.exists()
+                raise RuntimeError("release lock")
+        assert process is not None
+        stdout, stderr = process.communicate(timeout=10)
+        assert process.returncode == 0, (stdout, stderr)
+        assert acquired_path.read_text(encoding="utf-8") == "yes"
+    finally:
+        if process is not None and process.poll() is None:
+            process.kill()
+            process.wait(timeout=5)
 
 
 def test_valid_access_token_does_not_refresh(monkeypatch, tmp_path):

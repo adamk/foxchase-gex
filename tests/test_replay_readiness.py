@@ -1,4 +1,5 @@
 import json
+import os
 import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
@@ -66,7 +67,8 @@ def test_successful_refresh_is_securely_persisted(monkeypatch,tmp_path):
     assert value["access_token"] == "new-access"
     saved=json.loads((tmp_path/"tokens.json").read_text())
     assert saved["refresh_token"] == "new-refresh"
-    assert oct((tmp_path/"tokens.json").stat().st_mode & 0o777) == "0o600"
+    if os.name == "posix":
+        assert oct((tmp_path/"tokens.json").stat().st_mode & 0o777) == "0o600"
 
 
 def test_revoked_or_expired_refresh_fails_without_token_leak(monkeypatch,tmp_path):

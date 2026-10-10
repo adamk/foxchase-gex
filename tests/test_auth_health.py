@@ -1,4 +1,5 @@
 import json
+import os
 import threading
 import time
 from datetime import datetime, timezone
@@ -149,7 +150,8 @@ def test_refresh_lock_reuses_rotated_token_after_concurrent_refresh(monkeypatch,
     assert calls == ["old-refresh"]
     assert [result["access_token"] for result in results] == ["new-access", "new-access"]
     assert json.loads(token_file.read_text(encoding="utf-8"))["refresh_token"] == "rotated-refresh"
-    assert (tmp_path / "tokens.json.lock").stat().st_mode & 0o777 == 0o600
+    if os.name == "posix":
+        assert (tmp_path / "tokens.json.lock").stat().st_mode & 0o777 == 0o600
 
 
 def test_concurrent_permanent_failure_is_submitted_once(monkeypatch, tmp_path):

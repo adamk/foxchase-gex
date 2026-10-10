@@ -1,4 +1,5 @@
 import importlib
+import os
 import re
 from urllib.parse import parse_qs, urlparse
 
@@ -76,7 +77,8 @@ def test_save_connect_stores_locally_and_redirects_using_existing_authorization_
     assert secret not in response.get_data(as_text=True)
     assert secret not in response.headers["Location"]
     assert secret not in caplog.text
-    assert credentials_path.stat().st_mode & 0o777 == 0o600
+    if os.name == "posix":
+        assert credentials_path.stat().st_mode & 0o777 == 0o600
     assert secret in credentials_path.read_text(encoding="utf-8")
 
 
