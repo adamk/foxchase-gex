@@ -2,6 +2,8 @@ import json
 import subprocess
 from pathlib import Path
 
+from jinja2 import Environment
+
 
 ROOT = Path(__file__).parents[1]
 PRODUCTION_JS = ROOT / "deploy/production-ui/app.js"
@@ -26,12 +28,57 @@ def test_operator_strip_markup_is_hidden_by_default_in_both_pages():
         assert "client_secret" not in html
 
 
+def test_hosted_completion_form_is_rendered_only_for_authenticated_operator():
+    template = Environment().from_string(PRODUCTION_HTML.read_text(encoding="utf-8"))
+    context = {
+        "local_operator_access": False,
+        "operator_reauthorization_pending": False,
+        "operator_csrf_token": "csrf-test-value",
+        "operator_reauthorization_notice": None,
+        "schwab_connected": False,
+    }
+    anonymous = template.render(operator_authenticated=False, **context)
+    authenticated = template.render(operator_authenticated=True, **context)
+    pending = template.render(
+        operator_authenticated=True,
+        **{**context, "operator_reauthorization_pending": True},
+    )
+    success = template.render(
+        operator_authenticated=True,
+        **{
+            **context,
+            "operator_reauthorization_notice": {
+                "kind": "success",
+                "message": "Authorization refreshed. Schwab authentication was validated.",
+            },
+        },
+    )
+    local = LOCAL_HTML.read_text(encoding="utf-8")
+
+    assert 'id="operator-reauth-completion"' not in anonymous
+    assert 'id="operator-reauth-completion"' not in authenticated
+    assert 'id="operator-reauth-completion"' in pending
+    assert 'action="/operator/complete-schwab-reauthorization"' in pending
+    assert 'name="csrf_token" value="csrf-test-value"' in pending
+    assert 'id="operator-reauthorize-restart"' in pending
+    assert 'target="_blank"' in pending
+    assert 'rel="noopener noreferrer"' in pending
+    assert "Schwab reauthorization in progress" in pending
+    assert 'name="authorization_response"' in pending
+    assert 'placeholder="https://127.0.0.1/?code=..."' in pending
+    assert "Schwab Connected ✓" in success
+    assert 'id="operator-reauth-completion"' not in success
+    assert "operator-reauth-completion" not in local
+
+
 def test_operator_strip_is_styled_in_both_pages():
     for path in (PRODUCTION_CSS, LOCAL_CSS):
         css = path.read_text(encoding="utf-8")
         assert ".operator-auth-strip" in css
         assert ".operator-auth-link" in css
     production_css = PRODUCTION_CSS.read_text(encoding="utf-8")
+    assert ".operator-reauth-completion[hidden]" in production_css
+    assert ".operator-reauth-notice--error" in production_css
     assert '#operator-reauthorize-link[data-auth-state="healthy"]' in production_css
     assert '#operator-reauthorize-link[data-auth-state="due_soon"]' in production_css
     assert '#operator-reauthorize-link[data-auth-state="reauth_required"]' in production_css
@@ -51,6 +98,7 @@ const elements = new Map([
   ["operator-auth-strip", new Element()],
   ["operator-auth-label", new Element()],
   ["operator-reauthorize-link", new Element()],
+  ["operator-reauth-completion", new Element()],
   ["operator-logout-link", new Element()]
 ]);
 global.document = {{getElementById: id => elements.get(id)}};
@@ -61,29 +109,32 @@ async function main() {{
   assert.equal(elements.get("operator-auth-label").textContent, "");
   assert.equal(elements.get("operator-reauthorize-link").hidden, true);
 
-  global.fetch = async () => ({{ok: true, status: 200, json: async () => ({{state: "healthy", remaining_seconds: 464400}})}});
+  global.fetch = async () => ({{ok: true, status: 200, json: async () => ({{state: "healthy", remaining_seconds: 464400, reauthorization_pending: false}})}});
   await ui.loadOperatorAuthStatus();
   assert.equal(elements.get("operator-auth-strip").hidden, false);
   assert.equal(elements.get("operator-auth-label").textContent, "Schwab auth · 5d 9h remaining");
   assert.equal(elements.get("operator-reauthorize-link").hidden, !hosted);
+  assert.equal(elements.get("operator-reauth-completion").hidden, true);
   if (hosted) {{
     assert.equal(elements.get("operator-reauthorize-link").href, "/operator/reauthorize-schwab");
     assert.equal(elements.get("operator-reauthorize-link").dataset.authState, "healthy");
   }}
 
-  global.fetch = async () => ({{ok: true, status: 200, json: async () => ({{state: "due_soon", remaining_seconds: 3600}})}});
+  global.fetch = async () => ({{ok: true, status: 200, json: async () => ({{state: "due_soon", remaining_seconds: 3600, reauthorization_pending: true}})}});
   await ui.loadOperatorAuthStatus();
   assert.equal(elements.get("operator-auth-label").textContent, "Schwab auth · Reauthorize soon");
   assert.equal(elements.get("operator-reauthorize-link").hidden, false);
+  assert.equal(elements.get("operator-reauth-completion").hidden, !hosted);
   assert.equal(elements.get("operator-reauthorize-link").href, "/operator/reauthorize-schwab");
   if (hosted) assert.equal(elements.get("operator-reauthorize-link").dataset.authState, "due_soon");
   assert.equal(elements.get("operator-reauthorize-link").target, "_blank");
   assert.equal(elements.get("operator-reauthorize-link").rel, "noopener noreferrer");
 
-  global.fetch = async () => ({{ok: true, status: 200, json: async () => ({{state: "reauth_required", reauth_required: true}})}});
+  global.fetch = async () => ({{ok: true, status: 200, json: async () => ({{state: "reauth_required", reauth_required: true, reauthorization_pending: true}})}});
   await ui.loadOperatorAuthStatus();
   assert.equal(elements.get("operator-auth-label").textContent, "Schwab auth · Reauthorization required");
   assert.equal(elements.get("operator-reauthorize-link").hidden, false);
+  assert.equal(elements.get("operator-reauth-completion").hidden, !hosted);
   assert.equal(elements.get("operator-reauthorize-link").href, "/operator/reauthorize-schwab");
   if (hosted || isLocal) assert.equal(elements.get("operator-reauthorize-link").dataset.authState, "reauth_required");
 
@@ -92,6 +143,7 @@ async function main() {{
   assert.equal(elements.get("operator-auth-strip").hidden, true);
   assert.equal(elements.get("operator-auth-label").textContent, "");
   assert.equal(elements.get("operator-reauthorize-link").hidden, true);
+  assert.equal(elements.get("operator-reauth-completion").hidden, true);
   assert.equal(elements.get("operator-logout-link").hidden, true);
 
   let scheduled;

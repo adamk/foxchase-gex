@@ -554,3 +554,70 @@ button:disabled {
   margin-left: auto;
   color: #aaa;
 }
+
+.operator-reauth-completion,
+.operator-reauth-notice {
+  flex: 1 0 100%;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #444;
+  border-radius: 5px;
+  background: #151515;
+  color: #ddd;
+  line-height: 1.5;
+}
+
+.operator-reauth-completion[hidden] {
+  display: none !important;
+}
+
+.operator-reauth-completion ol {
+  margin: 8px 0 12px;
+  padding-left: 22px;
+}
+
+.operator-reauth-completion form {
+  display: grid;
+  gap: 8px;
+}
+
+.operator-reauth-completion textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 9px;
+  resize: vertical;
+  color: #eee;
+  background: #101010;
+  border: 1px solid #555;
+  border-radius: 4px;
+  font: 13px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.operator-reauth-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+.operator-reauth-actions button {
+  height: 36px;
+  padding: 0 12px;
+  border-color: #d8bf00;
+  color: #111;
+  background: #d8bf00;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.operator-reauth-notice {
+  margin: 0 0 12px;
+  border-color: #386c49;
+  background: #15251a;
+}
+
+.operator-reauth-notice--error {
+  border-color: #753434;
+  background: #301919;
+  color: #ffd5d5;
+}

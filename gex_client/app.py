@@ -6,11 +6,13 @@ import ipaddress
 import secrets
 import time
 from datetime import timedelta
-from urllib.parse import urlsplit
+from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import requests
 from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, make_response, redirect, render_template, request, session
+from jinja2 import ChoiceLoader, FileSystemLoader, PrefixLoader
 from werkzeug.security import check_password_hash
 
 from gex_client import auth_health, auth_lifecycle
@@ -26,6 +28,12 @@ from gex_client.schwab import (
 load_dotenv()
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
+_PACKAGE_TEMPLATE_LOADER = app.jinja_loader
+_HOSTED_TEMPLATE_DIRECTORY = Path(app.static_folder or "static") / "templates"
+app.jinja_loader = ChoiceLoader([
+    PrefixLoader({"hosted": FileSystemLoader(str(_HOSTED_TEMPLATE_DIRECTORY))}),
+    _PACKAGE_TEMPLATE_LOADER,
+])
 runtime_mode = os.getenv("GEX_ENV", "production").strip().lower()
 local_mode = runtime_mode in {"development", "local", "test"}
 local_setup_enabled = local_mode and os.getenv("GEX_LOCAL_SETUP_ENABLED", "") == "1"
@@ -52,6 +60,22 @@ app.config.update(
 
 _RESULT_CACHE: dict[str, dict] = {}
 _RESULT_CACHE_SECONDS = 20
+
+_OPERATOR_REAUTH_MESSAGES = {
+    "success": "Authorization refreshed. Schwab authentication was validated.",
+    "state_mismatch": (
+        "This authorization no longer matches the current session. Restart authorization "
+        "and use the newest Schwab tab."
+    ),
+    "code_rejected": (
+        "Schwab rejected this authorization code. Restart authorization and use the newest "
+        "redirected URL."
+    ),
+    "invalid_client": "Schwab rejected the configured Client ID or Client Secret.",
+    "local_save_error": "Schwab authorization could not be saved locally.",
+    "invalid_callback": "Paste the complete redirected https://127.0.0.1 URL and try again.",
+    "unknown": "Could not complete Schwab reauthorization. Restart authorization and try again.",
+}
 
 
 def _session_id() -> str:
@@ -80,10 +104,14 @@ def _remote_json(method: str, path: str, session_id: str, payload=None):
 
 @app.after_request
 def no_store_api(response):
+    authenticated_dashboard = (
+        request.path == "/" and session.get("operator_authenticated") is True
+    )
     if (
         request.path.startswith("/api/")
         or request.path.startswith("/operator/")
         or request.path.startswith("/setup")
+        or authenticated_dashboard
     ):
         response.headers["Cache-Control"] = "no-store"
         response.headers["Referrer-Policy"] = "no-referrer"
@@ -119,6 +147,19 @@ def _csrf_token() -> str:
         token = secrets.token_urlsafe(32)
         session["operator_csrf_token"] = token
     return token
+
+
+def _operator_reauthorization_pending() -> bool:
+    state = session.get("operator_schwab_oauth_state")
+    return isinstance(state, str) and 32 <= len(state) <= 1024
+
+
+def _dashboard_template_name(local_operator_access: bool) -> str:
+    if not local_mode and not local_operator_access and (
+        _HOSTED_TEMPLATE_DIRECTORY / "index.html"
+    ).is_file():
+        return "hosted/index.html"
+    return "index.html"
 
 
 def _valid_csrf() -> bool:
@@ -231,19 +272,73 @@ def _authorization_redirect(code: int = 302):
         except Exception:
             session.pop("local_schwab_oauth_state", None)
             raise
-    return redirect(schwab.authorization_url(), code=code)
+    state = secrets.token_urlsafe(32)
+    session["operator_schwab_oauth_state"] = state
+    try:
+        return redirect(schwab.authorization_url(state=state), code=code)
+    except Exception:
+        session.pop("operator_schwab_oauth_state", None)
+        raise
+
+
+def _hosted_authorization_response_error(value: str) -> str | None:
+    if not isinstance(value, str) or not value or len(value) > 8192:
+        return "invalid_callback"
+    try:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "https"
+            or parsed.hostname != "127.0.0.1"
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.port not in (None, 443)
+            or parsed.path not in ("", "/")
+            or parsed.fragment
+        ):
+            return "invalid_callback"
+        query = parse_qs(parsed.query, keep_blank_values=True, max_num_fields=16)
+    except (ValueError, UnicodeError):
+        return "invalid_callback"
+    codes = query.get("code", [])
+    states = query.get("state", [])
+    if len(codes) != 1 or not codes[0] or len(codes[0]) > 4096:
+        return "invalid_callback"
+    if len(states) != 1 or not 32 <= len(states[0]) <= 1024:
+        return "state_mismatch"
+    return None
 
 
 @app.get("/")
 def dashboard():
     if _local_setup_request() and not _setup_status_payload()["ready"]:
         return redirect("/setup", code=303)
+    local_operator_access = _local_setup_request()
+    operator_authenticated = (
+        not local_operator_access and session.get("operator_authenticated") is True
+    )
+    operator_reauthorization_pending = (
+        operator_authenticated and _operator_reauthorization_pending()
+    )
     connected_notice = False
     if isinstance(app.config.get("SECRET_KEY"), str) and len(app.config["SECRET_KEY"]) >= 32:
         connected_notice = bool(session.pop("schwab_connected_notice", False))
+    reauthorization_notice = None
+    operator_csrf_token = None
+    if operator_authenticated:
+        notice_key = session.pop("operator_reauthorization_notice", None)
+        if isinstance(notice_key, str) and notice_key in _OPERATOR_REAUTH_MESSAGES:
+            reauthorization_notice = {
+                "kind": "success" if notice_key == "success" else "error",
+                "message": _OPERATOR_REAUTH_MESSAGES[notice_key],
+            }
+        operator_csrf_token = _csrf_token()
     return render_template(
-        "index.html",
-        local_operator_access=_local_setup_request(),
+        _dashboard_template_name(local_operator_access),
+        local_operator_access=local_operator_access,
+        operator_authenticated=operator_authenticated,
+        operator_reauthorization_pending=operator_reauthorization_pending,
+        operator_csrf_token=operator_csrf_token,
+        operator_reauthorization_notice=reauthorization_notice,
         schwab_connected=connected_notice,
     )
 
@@ -408,7 +503,9 @@ def operator_auth_status():
     denied = _operator_gate()
     if denied:
         return denied
-    return jsonify(auth_lifecycle.operator_status())
+    status = auth_lifecycle.operator_status()
+    status["reauthorization_pending"] = _operator_reauthorization_pending()
+    return jsonify(status)
 
 
 @app.get("/operator/reauthorize-schwab")
@@ -420,6 +517,55 @@ def operator_reauthorize_schwab():
         return _authorization_redirect()
     except SchwabError:
         return "Schwab reauthorization is not configured.", 503
+
+
+@app.post("/operator/complete-schwab-reauthorization")
+def operator_complete_schwab_reauthorization():
+    # The hosted callback form is deliberately separate from the loopback-only
+    # self-hosted setup wizard and its /setup/complete exchange path.
+    if _local_setup_request():
+        abort(404)
+    denied = _operator_gate()
+    if denied:
+        return denied
+    if not _valid_csrf():
+        return "Invalid form session. Reload the dashboard and try again.", 400
+
+    expected_state = session.get("operator_schwab_oauth_state")
+    if not isinstance(expected_state, str) or len(expected_state) < 32:
+        session["operator_reauthorization_notice"] = "state_mismatch"
+        return redirect("/", code=303)
+
+    authorization_response = request.form.get("authorization_response", "")
+    callback_error = _hosted_authorization_response_error(authorization_response)
+    if callback_error:
+        session["operator_reauthorization_notice"] = callback_error
+        return redirect("/", code=303)
+
+    try:
+        schwab.exchange_authorization_response(
+            authorization_response, expected_state=expected_state
+        )
+    except Exception as exc:
+        # The submitted callback contains an authorization code. Log only the
+        # allowlisted failure class, never exception text or request data.
+        failure_class = getattr(exc, "failure_class", None)
+        safe_failure_class = (
+            failure_class
+            if isinstance(failure_class, str)
+            and failure_class in _OPERATOR_REAUTH_MESSAGES
+            and failure_class != "success"
+            else "unknown"
+        )
+        app.logger.warning(
+            "Hosted Schwab reauthorization failed: %s", safe_failure_class
+        )
+        session["operator_reauthorization_notice"] = safe_failure_class
+        return redirect("/", code=303)
+
+    session.pop("operator_schwab_oauth_state", None)
+    session["operator_reauthorization_notice"] = "success"
+    return redirect("/", code=303)
 
 
 @app.get("/api/health")

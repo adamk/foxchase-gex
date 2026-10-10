@@ -1,5 +1,5 @@
 {
-  "release_id": "foxchase-gex-production-ui-20261010-operator-reauth-button",
+  "release_id": "foxchase-gex-production-ui-20261010-reauth-completion",
   "source_root": "deploy/production-ui",
   "service": "foxchase-gex.service",
   "host_backing_root": "/opt/foxchase-authority-runtime/rootfs/opt/foxchase-gex",
@@ -9,9 +9,9 @@
     "style.css": "/opt/foxchase-gex/static/css/style.css"
   },
   "sha256": {
-    "index.html": "a012c223af3dd783f4a60cb3e6c176aa61a797dc586b0f73327a3a0dfacd99aa",
-    "app.js": "742a3fdec90f405708f5513f970723b535057fb0e2ad02b5fd64c82612636eaa",
-    "style.css": "24a698cf981b062b1e81446cf26525546e03b244a3a140831c367768b4a72789"
+    "index.html": "dc44ae7e718ba5d238d909edfe9fe0b45b5cbc9107a580ae4bc98fdaf7b1710c",
+    "app.js": "b5e6cf75c9d14a2b50ae4682141d7a32fdb488bd8bb2af6d3c5796ce050b9e75",
+    "style.css": "451a350397123a7c8974732de4106e705d2b5e4cb8d0db8fe43e7c99637e5d07"
   },
   "api_checks": [
     "https://gex.foxchasetrading.com/",

@@ -5,7 +5,7 @@
   <title>Foxchase GEX Dashboard</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <link rel="stylesheet" href="/static/css/style.css?v=operator-reauth-button-20261010" />
+  <link rel="stylesheet" href="/static/css/style.css?v=operator-reauth-completion-20261010" />
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
   <link rel="icon" type="image/svg+xml" href="/static/favicon.svg" />
 </head>
@@ -22,7 +22,31 @@
       <span id="operator-auth-label"></span>
       <a class="operator-auth-link" id="operator-reauthorize-link" href="/operator/reauthorize-schwab" target="_blank" rel="noopener noreferrer" hidden>Reauthorize Schwab</a>
       <a class="operator-auth-link operator-auth-logout" id="operator-logout-link" href="/operator/logout" hidden>Log out</a>
+      {% if operator_authenticated and operator_reauthorization_pending and not local_operator_access %}
+      <div class="operator-reauth-completion" id="operator-reauth-completion" hidden>
+        <strong>Schwab reauthorization in progress</strong>
+        <ol>
+          <li>Schwab redirects to <code>https://127.0.0.1</code>; that page may fail to load, which is expected.</li>
+          <li>Copy the complete URL from the browser address bar and return to this GEX tab.</li>
+        </ol>
+        <form method="post" action="/operator/complete-schwab-reauthorization" autocomplete="off">
+          <input type="hidden" name="csrf_token" value="{{ operator_csrf_token }}">
+          <label for="operator-reauth-callback">Paste the complete redirected URL</label>
+          <textarea id="operator-reauth-callback" name="authorization_response" rows="3" maxlength="8192" placeholder="https://127.0.0.1/?code=..." spellcheck="false" required></textarea>
+          <div class="operator-reauth-actions">
+            <button type="submit">Complete Reauthorization</button>
+            <a class="operator-auth-link" id="operator-reauthorize-restart" href="/operator/reauthorize-schwab" target="_blank" rel="noopener noreferrer">Restart Authorization</a>
+          </div>
+        </form>
+      </div>
+      {% endif %}
     </section>
+    {% if operator_authenticated and not local_operator_access and operator_reauthorization_notice %}
+    <div class="operator-reauth-notice operator-reauth-notice--{{ operator_reauthorization_notice.kind }}" role="{{ 'status' if operator_reauthorization_notice.kind == 'success' else 'alert' }}">
+      {% if operator_reauthorization_notice.kind == "success" %}<strong>Schwab Connected ✓</strong>{% endif %}
+      <span>{{ operator_reauthorization_notice.message }}</span>
+    </div>
+    {% endif %}
     <section class="controls" aria-label="Dashboard controls">
       <button id="refresh" type="button">refresh</button>
       <div class="status" id="updated" aria-live="polite">loading...</div>
@@ -208,6 +232,6 @@
     </section>
   </main>
 
-  <script src="/static/js/app.js?v=operator-reauth-button-20261010"></script>
+  <script src="/static/js/app.js?v=operator-reauth-completion-20261010"></script>
 </body>
 </html>

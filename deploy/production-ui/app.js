@@ -427,10 +427,12 @@ function hideOperatorAuthStatus() {
   const strip = $("operator-auth-strip");
   const label = $("operator-auth-label");
   const reauthorize = $("operator-reauthorize-link");
+  const completion = $("operator-reauth-completion");
   const logout = $("operator-logout-link");
   if (strip) strip.hidden = true;
   if (label) label.textContent = "";
   if (reauthorize) reauthorize.hidden = true;
+  if (completion) completion.hidden = true;
   if (logout) logout.hidden = true;
 }
 
@@ -449,6 +451,7 @@ async function loadOperatorAuthStatus() {
     const status = await response.json();
     const label = $("operator-auth-label");
     const reauthorize = $("operator-reauthorize-link");
+    const completion = $("operator-reauth-completion");
     const logout = $("operator-logout-link");
     if (!label || !reauthorize || !logout) return;
 
@@ -467,6 +470,7 @@ async function loadOperatorAuthStatus() {
     reauthorize.hidden = false;
     reauthorize.target = "_blank";
     reauthorize.rel = "noopener noreferrer";
+    if (completion) completion.hidden = status.reauthorization_pending !== true;
     logout.href = "/operator/logout";
     logout.hidden = false;
     strip.hidden = false;
