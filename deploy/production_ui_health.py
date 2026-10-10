@@ -32,6 +32,7 @@ GEX_ROOT = Path("/opt/foxchase-authority-runtime/rootfs/opt/foxchase-gex")
 STATIC_ROOT = GEX_ROOT / "static"
 SERVICE = "foxchase-gex.service"
 COMPUTE_SERVICE = "foxchase-gex-compute.service"
+EXPECTED_GUNICORN_WORKERS = 2
 SCHWAB_MARKET_DATA = "https://api.schwabapi.com/marketdata/v1"
 NY = ZoneInfo("America/New_York")
 ASSET_PATHS = {
@@ -222,6 +223,8 @@ def evaluate_deployment_health(
     now: datetime,
     service_active: bool,
     compute_active: bool,
+    gunicorn_workers: int,
+    restart_loop_clear: bool,
     site_status: int,
     backend_root_status: int,
     auth_status: dict,
@@ -234,6 +237,12 @@ def evaluate_deployment_health(
     """Apply the deployment policy to sanitized observations from the host."""
     if not service_active or not compute_active:
         raise DeploymentHealthError("GEX or compute service is not active")
+    if gunicorn_workers != EXPECTED_GUNICORN_WORKERS:
+        raise DeploymentHealthError(
+            f"unexpected Gunicorn worker count ({gunicorn_workers}; expected {EXPECTED_GUNICORN_WORKERS})"
+        )
+    if not restart_loop_clear:
+        raise DeploymentHealthError("GEX service restarted during the health gate")
     if site_status != 200:
         raise DeploymentHealthError("production root did not return HTTP 200")
     if backend_root_status != 200:
@@ -295,6 +304,56 @@ def _service_is_active(service: str) -> bool:
         text=True,
     )
     return result.returncode == 0
+
+
+def _read_service_snapshot(service: str) -> tuple[str, int, int]:
+    result = subprocess.run(
+        [
+            "systemctl", "show", service,
+            "--property=ActiveState,MainPID,NRestarts",
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise DeploymentHealthError("GEX service runtime state could not be checked")
+    try:
+        fields = dict(
+            line.split("=", maxsplit=1)
+            for line in result.stdout.splitlines()
+            if "=" in line
+        )
+        return fields["ActiveState"], int(fields["MainPID"]), int(fields["NRestarts"])
+    except (KeyError, ValueError) as exc:
+        raise DeploymentHealthError("GEX service runtime state was malformed") from exc
+
+
+def _gunicorn_worker_count(main_pid: int) -> int:
+    if main_pid <= 0:
+        return 0
+    result = subprocess.run(
+        ["ps", "-eo", "pid=,ppid=,args="],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise DeploymentHealthError("Gunicorn worker processes could not be checked")
+    workers = 0
+    for line in result.stdout.splitlines():
+        fields = line.strip().split(maxsplit=2)
+        if len(fields) != 3:
+            continue
+        try:
+            parent_pid = int(fields[1])
+        except ValueError:
+            continue
+        # On the deployed Gunicorn build, workers retain the master's argv;
+        # direct Gunicorn children of the systemd MainPID are the workers.
+        if parent_pid == main_pid and "gunicorn" in fields[2]:
+            workers += 1
+    return workers
 
 
 def _check_asset_hashes(asset_root: Path, manifest_path: Path) -> bool:
@@ -429,10 +488,16 @@ def run_health_check(
 ) -> str:
     now = now or datetime.now(timezone.utc)
     manifest = asset_manifest or Path(__file__).parent / "production-ui" / "SHA256SUMS"
-    service_active = _service_is_active(service)
+    service_before = _read_service_snapshot(service)
+    service_active = service_before[0] == "active" and service_before[1] > 0
     compute_active = _service_is_active(compute_service)
     if not service_active or not compute_active:
         raise DeploymentHealthError("GEX or compute service is not active")
+    workers_before = _gunicorn_worker_count(service_before[1])
+    if workers_before != EXPECTED_GUNICORN_WORKERS:
+        raise DeploymentHealthError(
+            f"unexpected Gunicorn worker count ({workers_before}; expected {EXPECTED_GUNICORN_WORKERS})"
+        )
     site_body = _require_200(site_url, "production root")
     backend_root = _require_200(local_url, "local backend root")
     _require_200(urljoin(site_url, "/static/css/style.css"), "production CSS")
@@ -467,10 +532,21 @@ def run_health_check(
                     token["access_token"], symbol, local_day
                 )
 
+    service_after = _read_service_snapshot(service)
+    compute_active = compute_active and _service_is_active(compute_service)
+    workers_after = _gunicorn_worker_count(service_after[1])
+    restart_loop_clear = (
+        service_after[0] == "active"
+        and service_before[1:] == service_after[1:]
+    )
+    gunicorn_workers = workers_after if workers_before == workers_after else -1
+
     result = evaluate_deployment_health(
         now=now,
         service_active=service_active,
         compute_active=compute_active,
+        gunicorn_workers=gunicorn_workers,
+        restart_loop_clear=restart_loop_clear,
         site_status=200 if site_body else 0,
         backend_root_status=200 if backend_root else 0,
         auth_status=auth_status,
@@ -487,7 +563,7 @@ def run_health_check(
     elif result in {"weekend_gex_healthy", "market_holiday_gex_healthy"}:
         print("DEPLOYMENT HEALTH PASS: auth and services healthy; closed-day GEX responses valid")
     else:
-        print("DEPLOYMENT HEALTH PASS: service, backend health, assets, Schwab auth, and weekday NDX/SPX GEX APIs healthy")
+        print("DEPLOYMENT HEALTH PASS: service, two Gunicorn workers, roots, assets, Schwab auth, and weekday NDX/SPX GEX APIs healthy")
     return result
 
 

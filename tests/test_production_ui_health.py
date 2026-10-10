@@ -52,6 +52,8 @@ def healthy_gate(**overrides):
         "now": now,
         "service_active": True,
         "compute_active": True,
+        "gunicorn_workers": 2,
+        "restart_loop_clear": True,
         "site_status": 200,
         "backend_root_status": 200,
         "auth_status": auth_status(now),
@@ -144,6 +146,18 @@ def test_weekend_chain_request_auth_failure_still_blocks():
 def test_weekend_service_or_compute_failure_blocks():
     with pytest.raises(DeploymentHealthError, match="service is not active"):
         healthy_gate(compute_active=False)
+    with pytest.raises(DeploymentHealthError, match="service is not active"):
+        healthy_gate(service_active=False)
+
+
+def test_wrong_gunicorn_worker_count_blocks():
+    with pytest.raises(DeploymentHealthError, match="Gunicorn worker"):
+        healthy_gate(gunicorn_workers=1)
+
+
+def test_service_restart_during_gate_blocks():
+    with pytest.raises(DeploymentHealthError, match="restarted"):
+        healthy_gate(restart_loop_clear=False)
 
 
 def test_weekend_stale_or_latched_auth_blocks():
@@ -183,6 +197,8 @@ def test_weekend_run_checks_roots_assets_auth_and_empty_0dte(monkeypatch):
     chain_probes = []
     visited = []
     monkeypatch.setattr(health, "_service_is_active", lambda service: True)
+    monkeypatch.setattr(health, "_read_service_snapshot", lambda service: ("active", 123, 0))
+    monkeypatch.setattr(health, "_gunicorn_worker_count", lambda main_pid: 2)
 
     def require_200(url, description):
         visited.append((url, description))
@@ -218,6 +234,33 @@ def test_weekend_run_checks_roots_assets_auth_and_empty_0dte(monkeypatch):
     assert {description for _, description in visited} >= {
         "production root", "local backend root", "production CSS", "production JavaScript"
     }
+    assert not any(url.rstrip("/").endswith("/api/health") for url, _ in visited)
+
+
+def test_gunicorn_worker_count_counts_service_master_children(monkeypatch):
+    output = """\
+100 1 /usr/bin/python -m gunicorn --workers 2 --bind 127.0.0.1:5055 wsgi:app
+101 100 /usr/bin/python -m gunicorn --workers 2 --bind 127.0.0.1:5055 wsgi:app
+102 100 /usr/bin/python -m gunicorn --workers 2 --bind 127.0.0.1:5055 wsgi:app
+103 100 /usr/bin/python helper
+104 999 /usr/bin/python -m gunicorn --workers 2 wsgi:app
+"""
+    monkeypatch.setattr(
+        health.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout=output),
+    )
+    assert health._gunicorn_worker_count(100) == 2
+
+
+def test_service_snapshot_reads_labeled_systemd_properties(monkeypatch):
+    output = "NRestarts=0\nMainPID=123\nActiveState=active\n"
+    monkeypatch.setattr(
+        health.subprocess,
+        "run",
+        lambda *_args, **_kwargs: SimpleNamespace(returncode=0, stdout=output),
+    )
+    assert health._read_service_snapshot("foxchase-gex.service") == ("active", 123, 0)
 
 
 def test_invalid_grant_api_response_blocks_integrated_deployment_gate(monkeypatch):
@@ -228,6 +271,8 @@ def test_invalid_grant_api_response_blocks_integrated_deployment_gate(monkeypatc
             now=now,
             service_active=True,
             compute_active=True,
+            gunicorn_workers=2,
+            restart_loop_clear=True,
             site_status=200,
             backend_root_status=200,
             auth_status=auth,

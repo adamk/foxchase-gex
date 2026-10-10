@@ -50,11 +50,12 @@ Script:
    failures, service failures, auth failures, or nonempty chains still block;
 7. restores the verified backup automatically if post-install validation fails.
 
-The health gate checks active GEX and compute services, public and local roots,
-served CSS/JavaScript, production asset hashes, healthy Schwab lifecycle
-metadata and remaining time, an authenticated Schwab quotes request, and fresh
-service logs. The current production app does not expose `/api/health`, so the
-gate does not depend on that route.
+The health gate checks active GEX and compute services, exactly two live
+Gunicorn workers, a stable GEX service PID and restart count during validation,
+public and local roots, served CSS/JavaScript, production asset hashes, healthy
+Schwab lifecycle metadata and remaining time, an authenticated Schwab quotes
+request, and fresh service logs. The current production app does not expose
+`/api/health`, so the gate does not depend on that route.
 
 Static templates/assets are read from disk per request, so no service restart
 normally required. Use `--restart` only when proven runtime/cache reason
