@@ -20,32 +20,49 @@
       {% endif %}
 
       {% if credential_source == "missing" or credential_source == "invalid_local_file" %}
+      <section class="setup-step" aria-labelledby="setup-step-one">
+        <div class="setup-kicker">Step 1</div>
+        <h2 id="setup-step-one">Connect your Schwab developer app</h2>
+        <p class="setup-hint">Copy the Client ID and Client Secret from your Schwab Developer Portal app details.</p>
       <form method="post" action="/setup/credentials" autocomplete="off">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <label for="client_id">Schwab App Key</label>
+        <label for="client_id">Schwab Client ID</label>
         <input id="client_id" name="client_id" type="text" maxlength="1024" autocomplete="off" required>
 
-        <label for="client_secret">Schwab App Secret</label>
+        <label for="client_secret">Schwab Client Secret</label>
         <input id="client_secret" name="client_secret" type="password" maxlength="4096" autocomplete="new-password" required>
 
         <label for="redirect_uri">Redirect URI</label>
         <input id="redirect_uri" name="redirect_uri" type="url" value="https://127.0.0.1" maxlength="2048" required>
         <p class="setup-hint">Use the exact callback URI registered for your Schwab developer app.</p>
 
-        <button type="submit">Save &amp; Connect Schwab</button>
+        <button type="submit">Save Schwab credentials</button>
       </form>
+      </section>
       {% elif credential_source == "incomplete_environment" %}
       <p class="setup-error" role="alert">The environment contains only part of the Schwab credential pair. Configure both environment variables or remove the partial override before continuing.</p>
       {% else %}
       <p class="setup-safe-note">Credentials are available from {{ "your environment" if credential_source == "environment" else "the private local credential file" }}. Their values are never displayed here.</p>
-      <a class="setup-button" href="/operator/reauthorize-schwab">{{ "Start or restart Schwab authorization" if authorization_pending else "Open Schwab authorization" }}</a>
-      <form method="post" action="/setup/complete" autocomplete="off">
-        <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
-        <label for="authorization_response">Paste the full redirected URL</label>
-        <textarea id="authorization_response" name="authorization_response" rows="3" maxlength="8192" autocomplete="off" spellcheck="false" placeholder="https://127.0.0.1/?code=…" required></textarea>
-        <p class="setup-hint">After Schwab redirects to https://127.0.0.1, copy the complete address-bar URL and paste it here. It is exchanged locally and not shown or logged.</p>
-        <button type="submit">{{ "Complete Schwab reauthorization" if setup_ready else "Complete Schwab connection" }}</button>
-      </form>
+      <section class="setup-step" aria-labelledby="setup-step-two">
+        <div class="setup-kicker">Step 2</div>
+        <h2 id="setup-step-two">Authorize with Schwab</h2>
+        <p>Schwab will open in a new browser tab.</p>
+        <p>After you approve access, Schwab will redirect you to <code>https://127.0.0.1</code>. That page may show a connection error. This is expected.</p>
+        <p>Do not close the browser. Copy the complete URL from the browser address bar, then return to this Foxchase GEX tab.</p>
+        <a class="setup-button" href="/operator/reauthorize-schwab" target="_blank" rel="noopener noreferrer">{{ "Restart Schwab Authorization" if authorization_pending else "Open Schwab Authorization" }}</a>
+      </section>
+      <section class="setup-step" aria-labelledby="setup-step-three">
+        <div class="setup-kicker">Step 3</div>
+        <h2 id="setup-step-three">Paste the redirected URL</h2>
+        <p class="setup-hint">After Schwab redirects you to the 127.0.0.1 page, copy the entire URL from the address bar and paste it here.</p>
+        <form method="post" action="/setup/complete" autocomplete="off">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+          <label for="authorization_response">Redirected URL</label>
+          <textarea id="authorization_response" name="authorization_response" rows="3" maxlength="8192" autocomplete="off" spellcheck="false" placeholder="https://127.0.0.1/?code=..." required></textarea>
+          <p class="setup-hint">The URL is processed locally and is not shown or logged after submission.</p>
+          <button type="submit">Complete Schwab Connection</button>
+        </form>
+      </section>
       {% endif %}
 
       <p class="setup-footer">Advanced users can still configure <code>.env</code> and use <code>python -m gex_client.login</code>.</p>

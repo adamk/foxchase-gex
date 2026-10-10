@@ -61,6 +61,16 @@ def test_partial_environment_credentials_fail_closed(monkeypatch, tmp_path):
         local_setup.configured_credentials()
 
 
+def test_missing_credential_validation_uses_portal_field_names(monkeypatch, tmp_path):
+    monkeypatch.setenv("SCHWAB_CREDENTIALS_PATH", str(tmp_path / "credentials.json"))
+
+    with pytest.raises(
+        local_setup.CredentialStoreError,
+        match="Client ID and Client Secret are required",
+    ):
+        local_setup.save_credentials("", "", "https://127.0.0.1")
+
+
 def test_session_secret_is_created_once_with_private_permissions(monkeypatch, tmp_path):
     path = tmp_path / "private" / "session_secret"
     monkeypatch.setenv("GEX_SESSION_SECRET_PATH", str(path))

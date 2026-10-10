@@ -78,6 +78,9 @@ button:disabled { cursor: wait; opacity: .55; }
 .setup-brand strong { margin-left: 4px; color: #d8bf00; }
 .setup-wizard { display: block; padding: 24px; }
 .setup-wizard h1 { margin: 7px 0 10px; color: #fff; font-size: 25px; }
+.setup-step { margin-top: 18px; padding: 16px; background: #151515; border: 1px solid #3c3c3c; border-radius: 6px; }
+.setup-step h2 { margin: 5px 0 10px; color: #fff; font-size: 18px; }
+.setup-step > p { margin: 0 0 9px; color: #bbb; font-size: 14px; line-height: 1.5; }
 .setup-intro, .setup-safe-note { color: #aaa; line-height: 1.55; }
 .setup-wizard form { display: grid; gap: 9px; margin-top: 20px; }
 .setup-wizard label { margin-top: 5px; color: #ddd; font-size: 14px; }

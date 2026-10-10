@@ -30,9 +30,9 @@ You need a regular Schwab brokerage account and a separate account on the [Schwa
 6. Use an app name such as `Foxchase Trading GEX Local`.
 7. Set the callback URL to exactly `https://127.0.0.1` with no trailing slash.
 8. Submit the app and wait until its status is **Ready for use**. A pending or provisionally approved app will not authenticate.
-9. Open the approved app's details and copy its app key/client ID and app secret. Never post either value or commit them to Git.
+9. Open the approved app's details and copy its **Client ID** and **Client Secret**. Never post either value or commit them to Git.
 
-Schwab may change the portal labels. The callback URL in the portal and `.env` must match exactly, including capitalization, protocol, port, path, and trailing slash.
+The callback URL in the portal and `.env` must match exactly, including capitalization, protocol, port, path, and trailing slash.
 
 ## 2. Install Foxchase Trading GEX
 
@@ -71,13 +71,14 @@ python run.py
 ```
 
 Open [http://127.0.0.1:8765](http://127.0.0.1:8765). On first run, the local
-dashboard opens the Schwab setup wizard. Enter the app key and app secret from
-your Schwab developer app; the redirect URI defaults to `https://127.0.0.1` and
-must exactly match the callback registered with Schwab.
+dashboard opens the Schwab setup wizard. Copy the **Client ID** and **Client
+Secret** from your Schwab Developer Portal app details. The redirect URI
+defaults to `https://127.0.0.1` and must exactly match the callback registered
+with Schwab.
 
-Choose **Save & Connect Schwab**. Foxchase GEX saves these credentials on your
-computer in `~/.foxchase-gex/schwab_credentials.json`, then opens the existing
-Schwab authorization flow. On Linux and macOS, the file and directory use
+Choose **Save Schwab credentials**. Foxchase GEX saves these credentials on your
+computer in `~/.foxchase-gex/schwab_credentials.json`, then returns to the setup
+page without navigating away. On Linux and macOS, the file and directory use
 `0600` and `0700` permissions. On Windows, the files inherit the ACL of the
 user-profile configuration directory because Windows does not expose equivalent
 POSIX mode bits; keep any custom configuration directory under a private user
@@ -87,13 +88,19 @@ it is not returned to the browser after saving and is not sent to Foxchase
 Trading. Foxchase GEX also creates a local session-signing secret in the same
 private directory when needed.
 
-Sign in to Schwab and approve the developer app. Schwab redirects to
-`https://127.0.0.1/?code=...`; that local HTTPS address may not load. Copy the
-complete URL from the browser address bar, return to the local setup page, and
-paste it into the form. The code is exchanged locally through the existing
-OAuth implementation and is neither displayed again nor logged. After a
-successful exchange, the dashboard shows **Schwab Connected** and the local
-Schwab authorization status.
+The setup page displays the remaining steps before you leave it:
+
+1. Click **Open Schwab Authorization**. Schwab opens in a new browser tab, and
+   the Foxchase GEX setup page stays open in the original tab.
+2. Sign in to Schwab and approve the developer app.
+3. Schwab redirects to `https://127.0.0.1`. The page may fail to load; this is
+   normal for this local callback flow.
+4. Keep the browser open and copy the complete URL from the address bar.
+5. Return to the still-open Foxchase GEX setup tab and paste the URL into Step 3.
+6. Click **Complete Schwab Connection**. The code is exchanged locally through
+   the existing OAuth implementation and is neither displayed again nor
+   logged. After a successful exchange, the dashboard shows **Schwab Connected
+   ✓** and the local Schwab authorization status.
 
 By default, `python run.py` binds to loopback only. Keep it on `127.0.0.1` or
 `localhost` while using the setup wizard; the wizard is disabled for
@@ -109,8 +116,8 @@ cp .env.example .env
 ```
 
 ```dotenv
-SCHWAB_CLIENT_ID=your_app_key
-SCHWAB_CLIENT_SECRET=your_app_secret
+SCHWAB_CLIENT_ID=your_client_id
+SCHWAB_CLIENT_SECRET=your_client_secret
 SCHWAB_REDIRECT_URI=https://127.0.0.1
 ```
 

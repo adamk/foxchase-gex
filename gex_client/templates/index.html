@@ -30,7 +30,10 @@
     </section>
 
     {% if schwab_connected %}
-    <div class="setup-connected" role="status">Schwab Connected</div>
+    <div class="setup-connected" role="status">
+      <strong>Schwab Connected ✓</strong>
+      <span>Authorization complete. Foxchase GEX can now retrieve SPX and NDX market data.</span>
+    </div>
     {% endif %}
 
     <div class="error" id="error" hidden></div>

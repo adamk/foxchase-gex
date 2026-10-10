@@ -418,8 +418,8 @@ async function checkSetup() {
     if (continueLink) continueLink.hidden = !setup.authorization_pending;
     if (!setup.ready) {
       const state = [
-        `App key: ${setup.client_id_configured ? "configured" : "missing"}`,
-        `App secret: ${setup.client_secret_configured ? "configured" : "missing"}`,
+        `Client ID: ${setup.client_id_configured ? "configured" : "missing"}`,
+        `Client Secret: ${setup.client_secret_configured ? "configured" : "missing"}`,
         `OAuth token: ${setup.token_configured ? "configured" : "missing"}`
       ];
       $("setup-state").textContent = state.join("  •  ");

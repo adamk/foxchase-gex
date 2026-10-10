@@ -31,6 +31,18 @@ def test_dashboard_renders_ndx_then_spx_with_independent_controls():
     assert 'pattern-box' not in html
 
 
+def test_setup_status_uses_schwab_developer_portal_credential_names():
+    script = SCRIPT.read_text(encoding="utf-8")
+    readme = (ROOT / "README.md").read_text(encoding="utf-8")
+    assert "Client ID:" in script
+    assert "Client Secret:" in script
+    assert "App key:" not in script
+    assert "App secret:" not in script
+    assert "Client ID" in readme
+    assert "Client Secret" in readme
+    assert not re.search(r"app key|app secret", readme, flags=re.IGNORECASE)
+
+
 def test_dashboard_css_has_wide_grid_and_stacked_breakpoint():
     css = STYLES.read_text(encoding="utf-8")
     assert ".chart-grid" in css

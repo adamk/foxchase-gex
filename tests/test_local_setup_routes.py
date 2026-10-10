@@ -47,11 +47,16 @@ def test_first_run_redirects_to_gui_setup_without_environment_credentials(monkey
     assert 'name="client_secret"' in body
     assert 'name="redirect_uri"' in body
     assert 'value="https://127.0.0.1"' in body
-    assert "Save &amp; Connect Schwab" in body
+    assert "Schwab Client ID" in body
+    assert "Schwab Client Secret" in body
+    assert "Copy the Client ID and Client Secret from your Schwab Developer Portal app details." in body
+    assert "Schwab App Key" not in body
+    assert "Schwab App Secret" not in body
+    assert "Save Schwab credentials" in body
     assert "SCHWAB_CLIENT_ID" not in body
 
 
-def test_save_connect_stores_locally_and_redirects_using_existing_authorization_url(
+def test_save_credentials_returns_to_setup_before_explicit_authorization_launch(
     monkeypatch, tmp_path, caplog
 ):
     configure_local_setup(monkeypatch, tmp_path)
@@ -68,8 +73,26 @@ def test_save_connect_stores_locally_and_redirects_using_existing_authorization_
 
     credentials_path = tmp_path / "config" / "credentials.json"
     assert response.status_code == 303
-    assert urlparse(response.headers["Location"]).hostname == "api.schwabapi.com"
-    authorize_params = parse_qs(urlparse(response.headers["Location"]).query)
+    assert response.headers["Location"] == "/setup"
+    assert "api.schwabapi.com" not in response.headers["Location"]
+    setup_after_save = client.get(response.headers["Location"])
+    assert setup_after_save.status_code == 200
+    body = setup_after_save.get_data(as_text=True)
+    assert "Step 2" in body
+    assert "Authorize with Schwab" in body
+    assert "Schwab will open in a new browser tab." in body
+    assert "This is expected." in body
+    assert "Step 3" in body
+    assert 'placeholder="https://127.0.0.1/?code=..."' in body
+    assert 'href="/operator/reauthorize-schwab" target="_blank" rel="noopener noreferrer"' in body
+    assert "Open Schwab Authorization" in body
+    assert "Complete Schwab Connection" in body
+    assert secret not in body
+
+    authorize = client.get("/operator/reauthorize-schwab")
+    assert authorize.status_code == 302
+    assert setup_after_save.status_code == 200
+    authorize_params = parse_qs(urlparse(authorize.headers["Location"]).query)
     assert authorize_params["client_id"] == ["private-test-app-key"]
     assert authorize_params["redirect_uri"] == ["https://127.0.0.1"]
     oauth_state = authorize_params["state"][0]
@@ -80,6 +103,27 @@ def test_save_connect_stores_locally_and_redirects_using_existing_authorization_
     if os.name == "posix":
         assert credentials_path.stat().st_mode & 0o777 == 0o600
     assert secret in credentials_path.read_text(encoding="utf-8")
+    assert "Restart Schwab Authorization" in client.get("/setup").get_data(as_text=True)
+
+
+def test_restarting_authorization_replaces_pending_state(monkeypatch, tmp_path):
+    configure_local_setup(monkeypatch, tmp_path)
+    local_setup.save_credentials("client-id", "client-secret", "https://127.0.0.1")
+    client = app_module.app.test_client()
+
+    first = client.get("/operator/reauthorize-schwab")
+    first_state = parse_qs(urlparse(first.headers["Location"]).query)["state"][0]
+    second = client.get("/operator/reauthorize-schwab")
+    second_state = parse_qs(urlparse(second.headers["Location"]).query)["state"][0]
+
+    assert first_state != second_state
+    page = client.get("/setup")
+    stale = client.post("/setup/complete", data={
+        "csrf_token": csrf_from(page),
+        "authorization_response": f"https://127.0.0.1/?code=old-code&state={first_state}",
+    })
+
+    assert stale.status_code == 400
 
 
 def test_save_connect_rejects_non_loopback_and_missing_csrf(monkeypatch, tmp_path):
@@ -199,6 +243,8 @@ def test_callback_uses_existing_exchange_and_redirects_to_connected_dashboard(
     assert "code=" not in response.headers["Location"]
     assert dashboard.status_code == 200
     assert "Schwab Connected" in dashboard.get_data(as_text=True)
+    assert "Schwab Connected ✓" in dashboard.get_data(as_text=True)
+    assert "Authorization complete. Foxchase GEX can now retrieve SPX and NDX market data." in dashboard.get_data(as_text=True)
     assert callback not in dashboard.get_data(as_text=True)
     assert "one-time-auth-code" not in caplog.text
 

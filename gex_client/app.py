@@ -250,13 +250,7 @@ def save_local_schwab_credentials():
             "Credentials could not be saved securely. Check the values and local file permissions, then try again.",
             400,
         )
-    try:
-        return _authorization_redirect(code=303)
-    except SchwabError:
-        return _render_setup(
-            "Schwab authorization could not be started. Check the app key and redirect URI, then try again.",
-            400,
-        )
+    return redirect("/setup", code=303)
 
 
 @app.post("/setup/complete")
@@ -269,7 +263,10 @@ def complete_local_schwab_setup():
         return "Invalid form session. Reload the setup page and try again.", 400
     configured = local_setup.credential_status()
     if not (configured["client_id_configured"] and configured["client_secret_configured"]):
-        return _render_setup("Save valid Schwab app credentials before completing authorization.", 409)
+        return _render_setup(
+            "Save a valid Schwab Client ID and Client Secret before completing authorization.",
+            409,
+        )
     expected_state = session.get("local_schwab_oauth_state")
     if not isinstance(expected_state, str) or len(expected_state) < 32:
         return _render_setup("Start a new Schwab authorization before pasting its redirect URL.", 409)

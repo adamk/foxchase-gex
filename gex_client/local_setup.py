@@ -72,7 +72,7 @@ def _validate_redirect_uri(value: str) -> str:
 
 def _validate_credentials(client_id: str, client_secret: str, redirect_uri: str) -> dict:
     if not isinstance(client_id, str) or not isinstance(client_secret, str):
-        raise CredentialStoreError("app key and secret are required")
+        raise CredentialStoreError("Client ID and Client Secret are required")
     app_key = client_id.strip()
     app_secret = client_secret.strip()
     if (
@@ -82,7 +82,7 @@ def _validate_credentials(client_id: str, client_secret: str, redirect_uri: str)
         or len(app_secret) > 4096
         or any(ord(char) < 32 for char in app_key + app_secret)
     ):
-        raise CredentialStoreError("app key and secret are required")
+        raise CredentialStoreError("Client ID and Client Secret are required")
     if not isinstance(redirect_uri, str):
         raise CredentialStoreError("redirect URI is required")
     return {
