@@ -196,6 +196,7 @@ def test_weekend_run_checks_roots_assets_auth_and_empty_0dte(monkeypatch):
     token = {"access_token": "test-access"}
     chain_probes = []
     visited = []
+    health_order = []
     monkeypatch.setattr(health, "_service_is_active", lambda service: True)
     monkeypatch.setattr(health, "_read_service_snapshot", lambda service: ("active", 123, 0))
     monkeypatch.setattr(health, "_gunicorn_worker_count", lambda main_pid: 2)
@@ -206,14 +207,18 @@ def test_weekend_run_checks_roots_assets_auth_and_empty_0dte(monkeypatch):
 
     monkeypatch.setattr(health, "_require_200", require_200)
     monkeypatch.setattr(health, "_check_asset_hashes", lambda *args: True)
-    monkeypatch.setattr(health, "_check_auth_state", lambda *args: (status, token))
+    def check_auth_state(*args):
+        health_order.append("auth")
+        return status, token
+
+    monkeypatch.setattr(health, "_check_auth_state", check_auth_state)
     monkeypatch.setattr(health, "_probe_authenticated_quotes", lambda value: 200)
     monkeypatch.setattr(health, "_check_fresh_logs", lambda *args: False)
-    monkeypatch.setattr(
-        health,
-        "_read_json_response",
-        lambda url, headers=None: no_session_response(url.rsplit("/", 1)[-1]),
-    )
+    def read_json_response(url, headers=None):
+        health_order.append("gex")
+        return no_session_response(url.rsplit("/", 1)[-1])
+
+    monkeypatch.setattr(health, "_read_json_response", read_json_response)
 
     def probe_chains(access_token, symbol, local_day):
         chain_probes.append((access_token, symbol, local_day))
@@ -230,6 +235,7 @@ def test_weekend_run_checks_roots_assets_auth_and_empty_0dte(monkeypatch):
     )
 
     assert result == "weekend_no_0dte_confirmed"
+    assert health_order.index("gex") < health_order.index("auth")
     assert [symbol for _, symbol, _ in chain_probes] == ["NDX", "SPX"]
     assert {description for _, description in visited} >= {
         "production root", "local backend root", "production CSS", "production JavaScript"

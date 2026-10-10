@@ -505,6 +505,16 @@ def run_health_check(
     assets_match = _check_asset_hashes(asset_root, manifest)
     if not assets_match:
         raise DeploymentHealthError("production UI asset hash mismatch")
+
+    local_day = now.astimezone(NY).date()
+    market_closed = _is_us_equity_market_closed(local_day)
+    # Let the production endpoint use its normal token-refresh path before
+    # checking token freshness and making the direct authenticated quote probe.
+    gex_responses = {
+        symbol: _read_json_response(f"{api_root}/{symbol}")
+        for symbol in ("NDX", "SPX")
+    }
+
     auth_status, token = _check_auth_state(token_path, now.timestamp())
     _validate_lifecycle(auth_status, now)
     quote_status = _probe_authenticated_quotes(token["access_token"])
@@ -514,12 +524,6 @@ def run_health_check(
     if fresh_auth_failure:
         raise DeploymentHealthError("fresh logs contain invalid_grant or invalid_client")
 
-    local_day = now.astimezone(NY).date()
-    market_closed = _is_us_equity_market_closed(local_day)
-    gex_responses = {
-        symbol: _read_json_response(f"{api_root}/{symbol}")
-        for symbol in ("NDX", "SPX")
-    }
     chain_responses = {}
     if market_closed:
         for symbol, (status_code, payload) in gex_responses.items():
