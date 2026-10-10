@@ -411,12 +411,19 @@ async function heartbeat() {
 async function checkSetup() {
   try {
     const response = await fetch("/api/setup-status", {cache: "no-store"});
+    if (!response.ok) throw new Error("Setup status unavailable");
     const setup = await response.json();
     const card = $("setup-card");
-    card.hidden = setup.ready;
+    const ready = setup.ready === true;
+    const credentialsConfigured = setup.client_id_configured === true
+      && setup.client_secret_configured === true;
+    const firstRun = setup.client_id_configured === false
+      && setup.client_secret_configured === false
+      && setup.token_configured === false;
+    card.hidden = ready || !firstRun;
     const continueLink = $("local-auth-continue");
     if (continueLink) continueLink.hidden = !setup.authorization_pending;
-    if (!setup.ready) {
+    if (!ready && firstRun) {
       const state = [
         `Client ID: ${setup.client_id_configured ? "configured" : "missing"}`,
         `Client Secret: ${setup.client_secret_configured ? "configured" : "missing"}`,
@@ -424,9 +431,17 @@ async function checkSetup() {
       ];
       $("setup-state").textContent = state.join("  •  ");
       setGlobalStatus("Schwab connection setup required");
+    } else if (!ready && credentialsConfigured) {
+      setGlobalStatus(setup.authorization_pending
+        ? "Schwab authorization pending"
+        : "Schwab authorization required");
     }
-    return setup.ready;
+    return ready;
   } catch (_) {
+    const card = $("setup-card");
+    if (card) card.hidden = true;
+    const continueLink = $("local-auth-continue");
+    if (continueLink) continueLink.hidden = true;
     return false;
   }
 }
@@ -484,6 +499,7 @@ async function loadOperatorAuthStatus() {
       return;
     }
     reauthorize.href = "/operator/reauthorize-schwab";
+    reauthorize.dataset.authState = status.state;
     reauthorize.target = "_blank";
     reauthorize.rel = "noopener noreferrer";
     logout.href = "/operator/logout";

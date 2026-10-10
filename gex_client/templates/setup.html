@@ -11,8 +11,8 @@
   <main class="setup-shell">
     <header class="setup-brand"><span>foxchase</span><strong>gex</strong></header>
     <section class="setup-card setup-wizard" aria-labelledby="setup-title">
-      <div class="setup-kicker">Local first-run setup</div>
-      <h1 id="setup-title">{{ "Reauthorize Schwab" if setup_ready else "Connect your Schwab developer app" }}</h1>
+      <div class="setup-kicker">{{ "Schwab reauthorization" if reauthorization_mode else "Local first-run setup" }}</div>
+      <h1 id="setup-title">{{ "Reauthorize Schwab" if reauthorization_mode else "Connect your Schwab developer app" }}</h1>
       <p class="setup-intro">Your Schwab credentials and OAuth tokens stay on this computer. They are not sent to Foxchase Trading.</p>
 
       {% if error_message %}

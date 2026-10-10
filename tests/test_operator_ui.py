@@ -43,6 +43,7 @@ def test_operator_ui_hides_unauthenticated_and_displays_only_expected_controls()
 const assert = require("node:assert/strict");
 const ui = require({json.dumps(str(path))});
 const hosted = {json.dumps(path == PRODUCTION_JS)};
+const isLocal = {json.dumps(path == LOCAL_JS)};
 class Element {{
   constructor() {{ this.hidden = true; this.textContent = ""; this.href = ""; this.target = ""; this.rel = ""; this.dataset = {{}}; }}
 }}
@@ -84,7 +85,7 @@ async function main() {{
   assert.equal(elements.get("operator-auth-label").textContent, "Schwab auth · Reauthorization required");
   assert.equal(elements.get("operator-reauthorize-link").hidden, false);
   assert.equal(elements.get("operator-reauthorize-link").href, "/operator/reauthorize-schwab");
-  if (hosted) assert.equal(elements.get("operator-reauthorize-link").dataset.authState, "reauth_required");
+  if (hosted || isLocal) assert.equal(elements.get("operator-reauthorize-link").dataset.authState, "reauth_required");
 
   global.fetch = async () => ({{ok: false, status: 401}});
   await ui.loadOperatorAuthStatus();
@@ -121,7 +122,7 @@ def test_local_loopback_operator_status_does_not_offer_login_logout(monkeypatch)
     script = f"""
 const assert = require("node:assert/strict");
 const ui = require({json.dumps(str(LOCAL_JS))});
-class Element {{ constructor() {{ this.hidden = true; this.textContent = ""; this.href = ""; }} }}
+class Element {{ constructor() {{ this.hidden = true; this.textContent = ""; this.href = ""; this.dataset = {{}}; }} }}
 const elements = new Map([
   ["operator-auth-strip", new Element()],
   ["operator-auth-label", new Element()],
@@ -150,7 +151,7 @@ def test_local_callback_continuation_tracks_pending_authorization():
     script = f"""
 const assert = require("node:assert/strict");
 const ui = require({json.dumps(str(LOCAL_JS))});
-class Element {{ constructor() {{ this.hidden = true; this.textContent = ""; }} }}
+class Element {{ constructor() {{ this.hidden = true; this.textContent = ""; this.dataset = {{}}; }} }}
 const elements = new Map([
   ["setup-card", new Element()],
   ["setup-state", new Element()],
@@ -170,6 +171,105 @@ async function main() {{
   setupStatus = {{ready: true, authorization_pending: false}};
   await ui.checkSetup();
   assert.equal(elements.get("local-auth-continue").hidden, true);
+}}
+main().catch(error => {{ console.error(error); process.exitCode = 1; }});
+"""
+    result = subprocess.run(["node", "-e", script], cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_local_setup_card_is_first_run_only_and_hidden_for_configured_accounts():
+    script = f"""
+const assert = require("node:assert/strict");
+const ui = require({json.dumps(str(LOCAL_JS))});
+class Element {{ constructor() {{ this.hidden = true; this.textContent = ""; }} }}
+const elements = new Map([
+  ["setup-card", new Element()],
+  ["setup-state", new Element()],
+  ["updated", new Element()],
+  ["local-auth-continue", new Element()]
+]);
+global.document = {{
+  body: {{dataset: {{localOperatorAccess: "true"}}}},
+  getElementById: id => elements.get(id)
+}};
+let status = {{
+  ready: false, client_id_configured: false,
+  client_secret_configured: false, token_configured: false,
+  authorization_pending: false
+}};
+global.fetch = async () => ({{ok: true, status: 200, json: async () => status}});
+async function main() {{
+  assert.equal(await ui.checkSetup(), false);
+  assert.equal(elements.get("setup-card").hidden, false);
+
+  status = {{
+    ready: false, client_id_configured: true,
+    client_secret_configured: true, token_configured: false,
+    authorization_pending: false
+  }};
+  assert.equal(await ui.checkSetup(), false);
+  assert.equal(elements.get("setup-card").hidden, true);
+
+  status = {{
+    ready: true, client_id_configured: true,
+    client_secret_configured: true, token_configured: true,
+    authorization_pending: false
+  }};
+  assert.equal(await ui.checkSetup(), true);
+  assert.equal(elements.get("setup-card").hidden, true);
+
+  global.fetch = async () => {{throw new Error("offline")}};
+  assert.equal(await ui.checkSetup(), false);
+  assert.equal(elements.get("setup-card").hidden, true);
+}}
+main().catch(error => {{ console.error(error); process.exitCode = 1; }});
+"""
+    result = subprocess.run(["node", "-e", script], cwd=ROOT, capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
+def test_local_lifecycle_controls_setup_card_and_reauthorization_action():
+    script = f"""
+const assert = require("node:assert/strict");
+const ui = require({json.dumps(str(LOCAL_JS))});
+class Element {{
+  constructor() {{ this.hidden = true; this.textContent = ""; this.href = ""; this.target = ""; this.rel = ""; this.dataset = {{}}; }}
+}}
+const elements = new Map([
+  ["setup-card", new Element()], ["setup-state", new Element()], ["local-auth-continue", new Element()],
+  ["operator-auth-strip", new Element()], ["operator-auth-label", new Element()],
+  ["operator-reauthorize-link", new Element()], ["operator-logout-link", new Element()]
+]);
+global.document = {{
+  body: {{dataset: {{localOperatorAccess: "true"}}}},
+  getElementById: id => elements.get(id)
+}};
+let lifecycleState = "healthy";
+global.fetch = async url => {{
+  if (url === "/api/setup-status") return {{ok: true, status: 200, json: async () => ({{
+    ready: true, client_id_configured: true, client_secret_configured: true,
+    token_configured: true, authorization_pending: false
+  }})}};
+  return {{ok: true, status: 200, json: async () => ({{
+    state: lifecycleState, remaining_seconds: 464400
+  }})}};
+}};
+async function main() {{
+  for (const [state, label, linkVisible] of [
+    ["healthy", "Schwab auth · 5d 9h remaining", false],
+    ["due_soon", "Schwab auth · Reauthorize soon", true],
+    ["reauth_required", "Schwab auth · Reauthorization required", true]
+  ]) {{
+    lifecycleState = state;
+    assert.equal(await ui.checkSetup(), true);
+    await ui.loadOperatorAuthStatus();
+    assert.equal(elements.get("setup-card").hidden, true);
+    assert.equal(elements.get("operator-auth-strip").hidden, false);
+    assert.equal(elements.get("operator-auth-label").textContent, label);
+    assert.equal(elements.get("operator-reauthorize-link").hidden, !linkVisible);
+    if (linkVisible) assert.equal(elements.get("operator-reauthorize-link").href, "/operator/reauthorize-schwab");
+  }}
 }}
 main().catch(error => {{ console.error(error); process.exitCode = 1; }});
 """

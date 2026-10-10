@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Foxchase GEX</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=gui-schwab-setup-state-20261008">
+  <link rel="stylesheet" href="/static/css/style.css?v=gui-schwab-auth-ux-20261010">
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 <body data-local-operator-access="{{ 'true' if local_operator_access else 'false' }}">
@@ -40,10 +40,10 @@
 
     <section class="setup-card" id="setup-card" hidden>
       <div class="setup-kicker">Schwab connection setup</div>
-      <h2>Complete the local Schwab setup</h2>
-      <p>The GUI setup is available when Foxchase GEX runs on this computer at its loopback address. Start it with <code>python run.py</code> and open <code>http://127.0.0.1:8765</code>.</p>
+      <h2>Connect your Schwab developer app</h2>
+      <p>Enter your Schwab Developer Portal credentials to connect this local Foxchase GEX installation. Your credentials stay on this computer.</p>
       <div class="setup-state" id="setup-state"></div>
-      <a href="/setup">Open local setup</a>
+      <a href="/setup">Open Schwab setup</a>
     </section>
 
     <section class="ramp-legend" aria-labelledby="ramp-legend-title">
@@ -239,6 +239,6 @@
     </section>
   </main>
 
-  <script src="/static/js/app.js?v=schwab-local-reauth-state-20261008"></script>
+  <script src="/static/js/app.js?v=gui-schwab-auth-ux-20261010"></script>
 </body>
 </html>

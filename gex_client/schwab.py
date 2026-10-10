@@ -46,7 +46,9 @@ _REFRESH_LOGGER.propagate = False
 
 
 class SchwabError(RuntimeError):
-    pass
+    def __init__(self, message: str, *, failure_class: str | None = None):
+        super().__init__(message)
+        self.failure_class = failure_class
 
 
 def _config_dir() -> Path:
@@ -150,7 +152,10 @@ def exchange_authorization_response(value: str, expected_state: str | None = Non
         or len(state_values) != 1
         or not hmac.compare_digest(state_values[0], expected_state)
     ):
-        raise SchwabError("the pasted authorization response did not match the expected OAuth state")
+        raise SchwabError(
+            "the pasted authorization response did not match the expected OAuth state",
+            failure_class="state_mismatch",
+        )
 
     client_id, client_secret, redirect_uri = _credentials()
     response = requests.post(
@@ -167,17 +172,36 @@ def exchange_authorization_response(value: str, expected_state: str | None = Non
         timeout=30,
     )
     if not response.ok:
+        try:
+            error_payload = response.json()
+        except (TypeError, ValueError):
+            error_payload = None
+        error_name = _oauth_error_name(error_payload)
+        if error_name == "invalid_client":
+            failure_class = "invalid_client"
+        elif error_name == "invalid_grant" or response.status_code in {400, 401}:
+            failure_class = "code_rejected"
+        else:
+            failure_class = "provider_error"
         raise SchwabError(
-            f"Schwab token exchange failed ({response.status_code}): {response.text[:500]}"
+            f"Schwab token exchange failed ({response.status_code})",
+            failure_class=failure_class,
         )
-    tokens = response.json()
-    save_tokens(tokens)
-    record_pending_interactive_authorization()
     try:
+        tokens = response.json()
+    except (TypeError, ValueError) as exc:
+        raise SchwabError(
+            "Schwab token exchange returned an invalid response",
+            failure_class="provider_error",
+        ) from exc
+    try:
+        save_tokens(tokens)
+        record_pending_interactive_authorization()
         record_full_oauth_authorization()
     except OSError as exc:
         raise SchwabError(
-            "authorization succeeded, but the nonsecret lifecycle metadata could not be saved"
+            "authorization succeeded, but local authorization state could not be saved",
+            failure_class="local_save_error",
         ) from exc
     return tokens
 

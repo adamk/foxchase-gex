@@ -43,6 +43,26 @@ def test_setup_status_uses_schwab_developer_portal_credential_names():
     assert not re.search(r"app key|app secret", readme, flags=re.IGNORECASE)
 
 
+def test_runtime_setup_card_is_hidden_when_marked_hidden_and_uses_no_fixed_port():
+    html = TEMPLATE.read_text(encoding="utf-8")
+    script = SCRIPT.read_text(encoding="utf-8")
+    styles = STYLES.read_text(encoding="utf-8")
+
+    assert 'id="setup-card" hidden' in html
+    assert ".setup-card[hidden]" in styles
+    assert "Connect your Schwab developer app" in html
+    assert "Complete the local Schwab setup" not in html
+    assert "http://127.0.0.1:8765" not in html + script
+
+
+def test_local_reauthorization_link_has_a_prominent_required_state_style():
+    styles = STYLES.read_text(encoding="utf-8")
+    assert '.operator-auth-link[data-auth-state="due_soon"]' in styles
+    assert '.operator-auth-link[data-auth-state="reauth_required"]' in styles
+    assert 'background: #d8bf00' in styles
+    assert 'font-weight: 700' in styles
+
+
 def test_dashboard_css_has_wide_grid_and_stacked_breakpoint():
     css = STYLES.read_text(encoding="utf-8")
     assert ".chart-grid" in css

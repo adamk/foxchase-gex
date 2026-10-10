@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 from flask import Flask, abort, jsonify, make_response, redirect, render_template, request, session
 from werkzeug.security import check_password_hash
 
-from gex_client import auth_lifecycle
+from gex_client import auth_health, auth_lifecycle
 from gex_client import local_setup, schwab
 from gex_client.archive import list_sessions, snapshot, timeline
 from gex_client.schwab import (
@@ -159,6 +159,44 @@ def _setup_status_payload() -> dict:
     }
 
 
+def _reauthorization_mode(configured: dict, setup_status: dict) -> bool:
+    credentials_configured = (
+        configured["client_id_configured"] and configured["client_secret_configured"]
+    )
+    if not credentials_configured:
+        return False
+    if setup_status["token_configured"]:
+        return True
+    if auth_lifecycle.load_lifecycle(migrate_legacy=False) is not None:
+        return True
+    health = auth_health.load_status()
+    return bool(
+        health.get("health") == "reauthorization_required"
+        or health.get("interactive_authorized_at")
+        or health.get("pending_interactive_authorized_at")
+    )
+
+
+_LOCAL_OAUTH_FAILURE_MESSAGES = {
+    "state_mismatch": (
+        "This authorization no longer matches the current setup session. "
+        "Click Restart Schwab Authorization and use the newest Schwab tab."
+    ),
+    "code_rejected": (
+        "Schwab rejected this authorization code. Start a new authorization "
+        "and paste the newest redirected URL."
+    ),
+    "invalid_client": (
+        "Schwab rejected the Client ID or Client Secret. Verify them in the "
+        "Schwab Developer Portal."
+    ),
+    "local_save_error": (
+        "Schwab authorization succeeded, but Foxchase GEX could not save the "
+        "local authorization state."
+    ),
+}
+
+
 def _render_setup(error_message: str | None = None, status_code: int = 200):
     if not isinstance(app.config.get("SECRET_KEY"), str) or len(app.config["SECRET_KEY"]) < 32:
         return "Local setup session key is unavailable; no credentials were saved.", 503
@@ -169,12 +207,12 @@ def _render_setup(error_message: str | None = None, status_code: int = 200):
             "setup.html",
             csrf_token=_csrf_token(),
             credential_source=configured["source"],
-            setup_ready=setup_status["ready"],
             authorization_pending=setup_status["authorization_pending"],
             credentials_configured=(
                 configured["client_id_configured"]
                 and configured["client_secret_configured"]
             ),
+            reauthorization_mode=_reauthorization_mode(configured, setup_status),
             error_message=error_message,
         ),
         status_code,
@@ -280,9 +318,18 @@ def complete_local_schwab_setup():
         )
     except Exception as exc:
         # Never log provider text or the submitted callback, which contains the code.
-        app.logger.warning("Local Schwab authorization exchange failed: %s", type(exc).__name__)
+        failure_class = getattr(exc, "failure_class", None)
+        safe_failure_class = (
+            failure_class
+            if isinstance(failure_class, str) and failure_class in _LOCAL_OAUTH_FAILURE_MESSAGES
+            else "unknown"
+        )
+        app.logger.warning("Local Schwab authorization exchange failed: %s", safe_failure_class)
         return _render_setup(
-            "Could not complete Schwab authorization. Check the pasted redirect and try again.",
+            _LOCAL_OAUTH_FAILURE_MESSAGES.get(
+                safe_failure_class,
+                "Could not complete Schwab authorization. Start a new authorization and paste the newest redirected URL.",
+            ),
             400,
         )
     session.pop("local_schwab_oauth_state", None)

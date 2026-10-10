@@ -57,6 +57,7 @@ button:disabled { cursor: wait; opacity: .55; }
   grid-template-columns: minmax(240px, .8fr) minmax(360px, 1.2fr); gap: 28px;
   background: #191919; border: 1px solid #3c3c3c; border-radius: 7px;
 }
+.setup-card[hidden] { display: none !important; }
 .setup-kicker, .section-kicker {
   color: #d8a900; font-size: 12px; font-weight: 700;
   letter-spacing: .12em; text-transform: uppercase;
@@ -368,6 +369,21 @@ button:disabled { cursor: wait; opacity: .55; }
   color: #d8bf00;
   text-decoration: underline;
   text-underline-offset: 2px;
+}
+
+.operator-auth-link[data-auth-state="due_soon"] {
+  font-weight: 700;
+}
+
+.operator-auth-link[data-auth-state="reauth_required"] {
+  display: inline-block;
+  padding: 5px 9px;
+  border: 1px solid #d8bf00;
+  border-radius: 4px;
+  background: #d8bf00;
+  color: #111;
+  font-weight: 700;
+  text-decoration: none;
 }
 
 .local-auth-continue {

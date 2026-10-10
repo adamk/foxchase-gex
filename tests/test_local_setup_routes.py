@@ -5,7 +5,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
-from gex_client import local_setup, schwab
+from gex_client import auth_health, auth_lifecycle, local_setup, schwab
 
 
 app_module = importlib.import_module("gex_client.app")
@@ -47,6 +47,7 @@ def test_first_run_redirects_to_gui_setup_without_environment_credentials(monkey
     assert 'name="client_secret"' in body
     assert 'name="redirect_uri"' in body
     assert 'value="https://127.0.0.1"' in body
+    assert '<h1 id="setup-title">Connect your Schwab developer app</h1>' in body
     assert "Schwab Client ID" in body
     assert "Schwab Client Secret" in body
     assert "Copy the Client ID and Client Secret from your Schwab Developer Portal app details." in body
@@ -78,6 +79,7 @@ def test_save_credentials_returns_to_setup_before_explicit_authorization_launch(
     setup_after_save = client.get(response.headers["Location"])
     assert setup_after_save.status_code == 200
     body = setup_after_save.get_data(as_text=True)
+    assert '<h1 id="setup-title">Connect your Schwab developer app</h1>' in body
     assert "Step 2" in body
     assert "Authorize with Schwab" in body
     assert "Schwab will open in a new browser tab." in body
@@ -219,14 +221,24 @@ def test_callback_uses_existing_exchange_and_redirects_to_connected_dashboard(
     configure_local_setup(monkeypatch, tmp_path)
     local_setup.save_credentials("app-key", "app-secret", "https://127.0.0.1")
     client = app_module.app.test_client()
-    seen = []
+    provider_calls = []
 
-    def exchange(value, expected_state=None):
-        seen.append((value, expected_state))
-        (tmp_path / "config" / "tokens.json").write_text('{"access_token":"redacted"}')
-        return {"ok": True}
+    class ProviderResponse:
+        ok = True
+        status_code = 200
 
-    monkeypatch.setattr(schwab, "exchange_authorization_response", exchange)
+        def json(self):
+            return {
+                "access_token": "private-access-token",
+                "refresh_token": "private-refresh-token",
+                "expires_in": 1800,
+            }
+
+    def provider_post(url, **kwargs):
+        provider_calls.append((url, kwargs))
+        return ProviderResponse()
+
+    monkeypatch.setattr(schwab.requests, "post", provider_post)
     authorize = client.get("/operator/reauthorize-schwab")
     expected_state = parse_qs(urlparse(authorize.headers["Location"]).query)["state"][0]
     page = client.get("/setup")
@@ -237,23 +249,44 @@ def test_callback_uses_existing_exchange_and_redirects_to_connected_dashboard(
         "authorization_response": callback,
     })
     dashboard = client.get(response.headers["Location"])
+    setup_status = client.get("/api/setup-status")
 
-    assert seen == [(callback, expected_state)]
+    assert len(provider_calls) == 1
+    assert provider_calls[0][1]["data"] == {
+        "grant_type": "authorization_code",
+        "code": "one-time-auth-code",
+        "redirect_uri": "https://127.0.0.1",
+    }
     assert response.status_code == 303
     assert "code=" not in response.headers["Location"]
     assert dashboard.status_code == 200
+    assert setup_status.status_code == 200
+    assert setup_status.json == {
+        "ready": True,
+        "client_id_configured": True,
+        "client_secret_configured": True,
+        "token_configured": True,
+        "authorization_pending": False,
+    }
+    assert set(auth_lifecycle.load_lifecycle()) == {"last_full_oauth_at", "next_reauth_due_at"}
+    dashboard_body = dashboard.get_data(as_text=True)
+    assert 'id="setup-card" hidden' in dashboard_body
+    assert "Complete the local Schwab setup" not in dashboard_body
+    assert "http://127.0.0.1:8765" not in dashboard_body
     assert "Schwab Connected" in dashboard.get_data(as_text=True)
     assert "Schwab Connected ✓" in dashboard.get_data(as_text=True)
     assert "Authorization complete. Foxchase GEX can now retrieve SPX and NDX market data." in dashboard.get_data(as_text=True)
     assert callback not in dashboard.get_data(as_text=True)
     assert "one-time-auth-code" not in caplog.text
+    assert "private-access-token" not in dashboard_body
+    assert "private-refresh-token" not in dashboard_body
 
     replay = client.post("/setup/complete", data={
         "csrf_token": csrf_from(page),
         "authorization_response": callback,
     })
     assert replay.status_code == 409
-    assert len(seen) == 1
+    assert len(provider_calls) == 1
 
 
 def test_callback_failure_is_sanitized_and_does_not_log_code(monkeypatch, tmp_path, caplog):
@@ -280,6 +313,95 @@ def test_callback_failure_is_sanitized_and_does_not_log_code(monkeypatch, tmp_pa
     assert "Could not complete Schwab authorization" in response.get_data(as_text=True)
 
 
+@pytest.mark.parametrize(
+    ("provider_error", "expected_message"),
+    [
+        (
+            "invalid_grant",
+            "Schwab rejected this authorization code. Start a new authorization and paste the newest redirected URL.",
+        ),
+        (
+            "invalid_client",
+            "Schwab rejected the Client ID or Client Secret. Verify them in the Schwab Developer Portal.",
+        ),
+    ],
+)
+def test_oauth_provider_failures_have_safe_specific_messages(
+    monkeypatch, tmp_path, caplog, provider_error, expected_message
+):
+    configure_local_setup(monkeypatch, tmp_path)
+    secret = "private-client-secret"
+    local_setup.save_credentials("private-client-id", secret, "https://127.0.0.1")
+
+    class ProviderResponse:
+        ok = False
+        status_code = 400
+        text = "provider response with sensitive details"
+
+        def json(self):
+            return {
+                "error": provider_error,
+                "error_description": "private provider description",
+            }
+
+    monkeypatch.setattr(schwab.requests, "post", lambda *args, **kwargs: ProviderResponse())
+    client = app_module.app.test_client()
+    authorize = client.get("/operator/reauthorize-schwab")
+    state = parse_qs(urlparse(authorize.headers["Location"]).query)["state"][0]
+    page = client.get("/setup")
+    code = "private-authorization-code"
+    response = client.post("/setup/complete", data={
+        "csrf_token": csrf_from(page),
+        "authorization_response": f"https://127.0.0.1/?code={code}&state={state}",
+    })
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 400
+    assert expected_message in body
+    assert code not in body + caplog.text
+    assert secret not in body + caplog.text
+    assert "private provider description" not in body + caplog.text
+    assert "provider response with sensitive details" not in body + caplog.text
+
+
+def test_successful_oauth_with_local_save_failure_has_specific_safe_message(
+    monkeypatch, tmp_path, caplog
+):
+    configure_local_setup(monkeypatch, tmp_path)
+    secret = "private-client-secret"
+    local_setup.save_credentials("private-client-id", secret, "https://127.0.0.1")
+
+    class ProviderResponse:
+        ok = True
+        status_code = 200
+
+        def json(self):
+            return {"access_token": "private-access-token", "refresh_token": "private-refresh-token"}
+
+    monkeypatch.setattr(schwab.requests, "post", lambda *args, **kwargs: ProviderResponse())
+
+    def fail_token_save(_tokens):
+        raise OSError("private filesystem details")
+
+    monkeypatch.setattr(schwab, "save_tokens", fail_token_save)
+    client = app_module.app.test_client()
+    authorize = client.get("/operator/reauthorize-schwab")
+    state = parse_qs(urlparse(authorize.headers["Location"]).query)["state"][0]
+    page = client.get("/setup")
+    code = "private-authorization-code"
+    response = client.post("/setup/complete", data={
+        "csrf_token": csrf_from(page),
+        "authorization_response": f"https://127.0.0.1/?code={code}&state={state}",
+    })
+    body = response.get_data(as_text=True)
+
+    assert response.status_code == 400
+    assert "Schwab authorization succeeded, but Foxchase GEX could not save the local authorization state." in body
+    assert all(value not in body + caplog.text for value in (
+        code, secret, "private-access-token", "private-refresh-token", "private filesystem details"
+    ))
+
+
 def test_callback_state_mismatch_is_rejected_before_token_exchange(monkeypatch, tmp_path):
     configure_local_setup(monkeypatch, tmp_path)
     local_setup.save_credentials("app-key", "app-secret", "https://127.0.0.1")
@@ -301,6 +423,8 @@ def test_callback_state_mismatch_is_rejected_before_token_exchange(monkeypatch, 
     assert expected_state != "wrong-state"
     assert response.status_code == 400
     assert exchange_calls == []
+    assert "This authorization no longer matches the current setup session." in response.get_data(as_text=True)
+    assert "Restart Schwab Authorization" in response.get_data(as_text=True)
 
 
 def test_local_reauthorization_keeps_callback_form_reachable_for_connected_user(
@@ -321,10 +445,28 @@ def test_local_reauthorization_keeps_callback_form_reachable_for_connected_user(
     dashboard = client.get("/")
 
     assert setup.status_code == 200
-    assert 'name="authorization_response"' in setup.get_data(as_text=True)
+    setup_body = setup.get_data(as_text=True)
+    assert '<h1 id="setup-title">Reauthorize Schwab</h1>' in setup_body
+    assert 'name="authorization_response"' in setup_body
     assert status.json["authorization_pending"] is True
     assert state not in status.get_data(as_text=True)
     assert 'id="local-auth-continue"' in dashboard.get_data(as_text=True)
+
+
+def test_missing_token_with_invalid_grant_latch_uses_reauthorization_heading(monkeypatch, tmp_path):
+    configure_local_setup(monkeypatch, tmp_path)
+    local_setup.save_credentials("existing-client-id", "existing-client-secret", "https://127.0.0.1")
+    auth_health.record_auth_failure("invalid_grant")
+    client = app_module.app.test_client()
+
+    authorize = client.get("/operator/reauthorize-schwab")
+    assert authorize.status_code == 302
+    setup = client.get("/setup")
+
+    assert setup.status_code == 200
+    body = setup.get_data(as_text=True)
+    assert '<h1 id="setup-title">Reauthorize Schwab</h1>' in body
+    assert "Connect your Schwab developer app" not in body
 
 
 def test_setup_routes_and_local_operator_status_are_disabled_outside_local_mode(
