@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only production health gate for the hosted GEX UI release."""
+"""Production health gate for the hosted GEX UI release."""
 
 from __future__ import annotations
 
@@ -29,6 +29,9 @@ TOKEN_PATH = Path(
     "/opt/foxchase-authority-runtime/rootfs/var/lib/foxchase-gex/schwab_tokens.json"
 )
 GEX_ROOT = Path("/opt/foxchase-authority-runtime/rootfs/opt/foxchase-gex")
+SERVICE_PYTHON = Path("/opt/foxchase-authority-runtime/gex-venv/bin/python")
+SERVICE_ACCOUNT = "foxchase-gex"
+SERVICE_EXTRA_GROUPS = ("ubuntu", "foxchase-dashboard")
 STATIC_ROOT = GEX_ROOT / "static"
 SERVICE = "foxchase-gex.service"
 COMPUTE_SERVICE = "foxchase-gex-compute.service"
@@ -383,7 +386,7 @@ def _check_asset_hashes(asset_root: Path, manifest_path: Path) -> bool:
     return True
 
 
-def _check_auth_state(token_path: Path, now: float) -> tuple[dict, dict]:
+def _read_secure_token(token_path: Path) -> dict:
     try:
         token_stat = token_path.stat()
         owner = pwd.getpwuid(token_stat.st_uid).pw_name
@@ -397,11 +400,52 @@ def _check_auth_state(token_path: Path, now: float) -> tuple[dict, dict]:
         or stat.S_IMODE(token_stat.st_mode) != 0o600
     ):
         raise DeploymentHealthError("Schwab token ownership or mode is invalid")
-    saved_at = int(token.get("saved_at", 0))
-    expires_in = int(token.get("expires_in", 0))
-    access_token = token.get("access_token")
-    if not access_token or now >= saved_at + expires_in - 90:
-        raise DeploymentHealthError("Schwab access token is missing or stale")
+    return token
+
+
+def _access_token_is_fresh(token: dict, now: float) -> bool:
+    try:
+        saved_at = int(token.get("saved_at", 0))
+        expires_in = int(token.get("expires_in", 1800))
+        refresh_after_age = max(60, expires_in - 120)
+        return bool(token.get("access_token")) and now - saved_at <= refresh_after_age
+    except (AttributeError, TypeError, ValueError, OverflowError):
+        return False
+
+
+def _refresh_access_token_as_service(token_path: Path) -> None:
+    command = [
+        str(SERVICE_PYTHON),
+        "-c",
+        "from app.schwab_auth import get_access_token; get_access_token()",
+    ]
+    try:
+        result = subprocess.run(
+            command,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=45,
+            cwd=str(GEX_ROOT),
+            env={
+                "PATH": os.defpath,
+                "PYTHONPATH": str(GEX_ROOT),
+                "SCHWAB_TOKEN_PATH": str(token_path),
+            },
+            user=SERVICE_ACCOUNT,
+            group=SERVICE_ACCOUNT,
+            extra_groups=SERVICE_EXTRA_GROUPS,
+        )
+    except (OSError, subprocess.SubprocessError, ValueError) as exc:
+        raise DeploymentHealthError(
+            "production Schwab access-token refresh could not run"
+        ) from exc
+    if result.returncode != 0:
+        raise DeploymentHealthError("production Schwab access-token refresh failed")
+
+
+def _check_auth_state(token_path: Path, now: float) -> tuple[dict, dict]:
+    token = _read_secure_token(token_path)
 
     try:
         lifecycle_source = GEX_ROOT / "app" / "schwab_lifecycle.py"
@@ -412,17 +456,40 @@ def _check_auth_state(token_path: Path, now: float) -> tuple[dict, dict]:
             raise ImportError("production lifecycle module unavailable")
         lifecycle_module = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(lifecycle_module)
+    except (OSError, ImportError, AttributeError, TypeError, ValueError) as exc:
+        raise DeploymentHealthError("production operator auth status could not be read") from exc
+
+    def read_status() -> dict:
         prior_token_path = os.environ.get("SCHWAB_TOKEN_PATH")
         os.environ["SCHWAB_TOKEN_PATH"] = str(token_path)
         try:
-            status = lifecycle_module.operator_status(now)
+            return lifecycle_module.operator_status(now)
+        except (OSError, AttributeError, TypeError, ValueError) as exc:
+            raise DeploymentHealthError(
+                "production operator auth status could not be read"
+            ) from exc
         finally:
             if prior_token_path is None:
                 os.environ.pop("SCHWAB_TOKEN_PATH", None)
             else:
                 os.environ["SCHWAB_TOKEN_PATH"] = prior_token_path
-    except (OSError, ImportError, AttributeError, TypeError, ValueError) as exc:
-        raise DeploymentHealthError("production operator auth status could not be read") from exc
+
+    status = read_status()
+    now_utc = datetime.fromtimestamp(now, timezone.utc)
+    _validate_lifecycle(status, now_utc)
+    if not _access_token_is_fresh(token, now):
+        _refresh_access_token_as_service(token_path)
+        token = _read_secure_token(token_path)
+        if not _access_token_is_fresh(token, now):
+            raise DeploymentHealthError("Schwab access token is missing or stale")
+        refreshed_status = read_status()
+        _validate_lifecycle(refreshed_status, now_utc)
+        if any(
+            refreshed_status.get(field) != status.get(field)
+            for field in ("last_full_oauth_at", "next_reauth_due_at", "reauth_required")
+        ):
+            raise DeploymentHealthError("normal token refresh changed OAuth lifecycle")
+        status = refreshed_status
     return status, token
 
 
@@ -506,15 +573,6 @@ def run_health_check(
     if not assets_match:
         raise DeploymentHealthError("production UI asset hash mismatch")
 
-    local_day = now.astimezone(NY).date()
-    market_closed = _is_us_equity_market_closed(local_day)
-    # Let the production endpoint use its normal token-refresh path before
-    # checking token freshness and making the direct authenticated quote probe.
-    gex_responses = {
-        symbol: _read_json_response(f"{api_root}/{symbol}")
-        for symbol in ("NDX", "SPX")
-    }
-
     auth_status, token = _check_auth_state(token_path, now.timestamp())
     _validate_lifecycle(auth_status, now)
     quote_status = _probe_authenticated_quotes(token["access_token"])
@@ -524,6 +582,12 @@ def run_health_check(
     if fresh_auth_failure:
         raise DeploymentHealthError("fresh logs contain invalid_grant or invalid_client")
 
+    local_day = now.astimezone(NY).date()
+    market_closed = _is_us_equity_market_closed(local_day)
+    gex_responses = {
+        symbol: _read_json_response(f"{api_root}/{symbol}")
+        for symbol in ("NDX", "SPX")
+    }
     chain_responses = {}
     if market_closed:
         for symbol, (status_code, payload) in gex_responses.items():

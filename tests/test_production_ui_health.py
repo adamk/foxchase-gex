@@ -235,12 +235,121 @@ def test_weekend_run_checks_roots_assets_auth_and_empty_0dte(monkeypatch):
     )
 
     assert result == "weekend_no_0dte_confirmed"
-    assert health_order.index("gex") < health_order.index("auth")
+    assert health_order.index("auth") < health_order.index("gex")
     assert [symbol for _, symbol, _ in chain_probes] == ["NDX", "SPX"]
     assert {description for _, description in visited} >= {
         "production root", "local backend root", "production CSS", "production JavaScript"
     }
     assert not any(url.rstrip("/").endswith("/api/health") for url, _ in visited)
+
+
+def test_expired_access_token_uses_service_refresh_without_resetting_lifecycle(
+    monkeypatch, tmp_path
+):
+    oauth_epoch = datetime.fromisoformat(OAUTH_AT).timestamp()
+    now = oauth_epoch + 2000
+    remaining = int(datetime.fromisoformat(DUE_AT).timestamp() - now)
+    status = {
+        "state": "healthy",
+        "reauth_required": False,
+        "last_full_oauth_at": OAUTH_AT,
+        "next_reauth_due_at": DUE_AT,
+        "remaining_seconds": remaining,
+    }
+    app_dir = tmp_path / "app"
+    app_dir.mkdir()
+    (app_dir / "schwab_lifecycle.py").write_text(
+        f"def operator_status(now):\n    return {status!r}\n", encoding="utf-8"
+    )
+    token_path = tmp_path / "schwab_tokens.json"
+    token_path.write_text(
+        json.dumps({"access_token": "old", "saved_at": int(now) - 1800, "expires_in": 1800}),
+        encoding="utf-8",
+    )
+    token_path.chmod(0o600)
+    monkeypatch.setattr(health, "GEX_ROOT", tmp_path)
+    monkeypatch.setattr(health.pwd, "getpwuid", lambda uid: SimpleNamespace(pw_name="foxchase-gex"))
+    refresh_calls = []
+
+    def normal_refresh(path):
+        refresh_calls.append(path)
+        path.write_text(
+            json.dumps({"access_token": "fresh", "saved_at": int(now), "expires_in": 1800}),
+            encoding="utf-8",
+        )
+        path.chmod(0o600)
+
+    monkeypatch.setattr(health, "_refresh_access_token_as_service", normal_refresh, raising=False)
+
+    auth_status, token = health._check_auth_state(token_path, now)
+
+    assert auth_status["last_full_oauth_at"] == OAUTH_AT
+    assert auth_status["next_reauth_due_at"] == DUE_AT
+    assert token["access_token"] == "fresh"
+    assert refresh_calls == [token_path]
+
+
+def test_latched_auth_blocks_expired_token_refresh(monkeypatch, tmp_path):
+    oauth_epoch = datetime.fromisoformat(OAUTH_AT).timestamp()
+    now = oauth_epoch + 2000
+    status = {
+        "state": "reauth_required",
+        "reauth_required": True,
+        "last_full_oauth_at": OAUTH_AT,
+        "next_reauth_due_at": DUE_AT,
+        "remaining_seconds": 602800,
+    }
+    app_dir = tmp_path / "app"
+    app_dir.mkdir()
+    (app_dir / "schwab_lifecycle.py").write_text(
+        f"def operator_status(now):\n    return {status!r}\n", encoding="utf-8"
+    )
+    token_path = tmp_path / "schwab_tokens.json"
+    token_path.write_text(
+        json.dumps({"access_token": "old", "saved_at": int(now) - 1800, "expires_in": 1800}),
+        encoding="utf-8",
+    )
+    token_path.chmod(0o600)
+    monkeypatch.setattr(health, "GEX_ROOT", tmp_path)
+    monkeypatch.setattr(health.pwd, "getpwuid", lambda uid: SimpleNamespace(pw_name="foxchase-gex"))
+    monkeypatch.setattr(
+        health,
+        "_refresh_access_token_as_service",
+        lambda *_: pytest.fail("latched auth must not attempt refresh"),
+        raising=False,
+    )
+
+    with pytest.raises(DeploymentHealthError, match="auth lifecycle is not healthy"):
+        health._check_auth_state(token_path, now)
+
+
+def test_normal_refresh_runs_production_auth_as_service_user(monkeypatch, tmp_path):
+    gex_root = tmp_path / "foxchase-gex"
+    token_path = gex_root / "var/lib/foxchase-gex/schwab_tokens.json"
+    calls = []
+    monkeypatch.setattr(health, "GEX_ROOT", gex_root)
+    monkeypatch.setattr(health, "SERVICE_PYTHON", tmp_path / "gex-venv/bin/python", raising=False)
+    monkeypatch.setattr(health, "SERVICE_ACCOUNT", "foxchase-gex", raising=False)
+    monkeypatch.setattr(
+        health, "SERVICE_EXTRA_GROUPS", ("ubuntu", "foxchase-dashboard"), raising=False
+    )
+    monkeypatch.setattr(
+        health.subprocess,
+        "run",
+        lambda *args, **kwargs: calls.append((args, kwargs)) or SimpleNamespace(returncode=0),
+    )
+
+    health._refresh_access_token_as_service(token_path)
+
+    args, kwargs = calls[0]
+    assert args[0][0] == str(tmp_path / "gex-venv/bin/python")
+    assert "from app.schwab_auth import get_access_token" in args[0][2]
+    assert kwargs["user"] == "foxchase-gex"
+    assert kwargs["group"] == "foxchase-gex"
+    assert kwargs["extra_groups"] == ("ubuntu", "foxchase-dashboard")
+    assert kwargs["cwd"] == str(gex_root)
+    assert kwargs["env"]["PYTHONPATH"] == str(gex_root)
+    assert kwargs["env"]["SCHWAB_TOKEN_PATH"] == str(token_path)
 
 
 def test_gunicorn_worker_count_counts_service_master_children(monkeypatch):

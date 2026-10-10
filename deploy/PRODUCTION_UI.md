@@ -36,7 +36,9 @@ Script:
 
 1. validates reviewed source hashes, exact production paths, and the current
    production asset baseline;
-2. runs the read-only health gate against the current production hashes;
+2. runs the health gate against the current production hashes; it validates
+   operator OAuth lifecycle first and uses the production `get_access_token()`
+   path as `foxchase-gex` only when a healthy lifecycle has a stale access token;
 3. creates `/opt/foxchase-gex/ui-backups/<UTC timestamp>/`, copies all three
    current UI files, and verifies the backup `SHA256SUMS`;
 4. installs exactly the three mapped UI files, preserving target owner, group,
@@ -55,12 +57,14 @@ Gunicorn workers, a stable GEX service PID and restart count during validation,
 public and local roots, served CSS/JavaScript, production asset hashes, healthy
 Schwab lifecycle metadata and remaining time, an authenticated Schwab quotes
 request, and fresh service logs. The current production app does not expose
-`/api/health`, so the gate does not depend on that route.
+`/api/health`, so the gate does not depend on that route. A normal access-token
+refresh may update the token file when needed; it must preserve owner/mode and
+must not reset the full-OAuth lifecycle or clear an auth-failure latch.
 
 Static templates/assets are read from disk per request, so no service restart
 normally required. Use `--restart` only when proven runtime/cache reason
 requires it; it restarts `foxchase-gex.service` only.
 
-Script never writes root-level `/SHA256SUMS`, modifies Schwab tokens, or changes
-backend/auth/systemd configuration. Review baseline and backup output before
-production deployment.
+Script never writes root-level `/SHA256SUMS`, manually edits Schwab state, or
+changes backend/auth/systemd configuration. Review baseline and backup output
+before production deployment.
