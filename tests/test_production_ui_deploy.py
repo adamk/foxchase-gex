@@ -64,9 +64,9 @@ def test_production_deploy_guard_targets_verified_host_backing_tree():
     backing = "/opt/foxchase-authority-runtime/rootfs/opt/foxchase-gex"
     assert f'TARGET_ROOT="{backing}"' in script
     assert baseline == {
-        f"{backing}/static/templates/index.html": "9d10a3692407dda7f3d22fa32bdf5c77e01092861c5a48998180183f07022408",
-        f"{backing}/static/js/app.js": "072724c0cfa035c9750eae3ec84df894bc415b39b54823ab34f1d07adddbe356",
-        f"{backing}/static/css/style.css": "dbcabbbb051bf5a15ef81c54e4bb18f2b4bf91c47aef536afd85470e3f1b94ad",
+        f"{backing}/static/templates/index.html": "a012c223af3dd783f4a60cb3e6c176aa61a797dc586b0f73327a3a0dfacd99aa",
+        f"{backing}/static/js/app.js": "742a3fdec90f405708f5513f970723b535057fb0e2ad02b5fd64c82612636eaa",
+        f"{backing}/static/css/style.css": "24a698cf981b062b1e81446cf26525546e03b244a3a140831c367768b4a72789",
     }
 
 
