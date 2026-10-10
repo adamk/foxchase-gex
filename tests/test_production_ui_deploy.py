@@ -1,7 +1,10 @@
 import hashlib
 import json
+import os
 import subprocess
 from pathlib import Path
+
+import pytest
 
 
 ROOT = Path(__file__).parents[1]
@@ -15,13 +18,16 @@ def sha256(path: Path) -> str:
 
 
 def test_production_ui_source_manifest_matches_files():
-    result = subprocess.run(
-        ["sha256sum", "-c", "SHA256SUMS"],
-        cwd=PRODUCTION_UI,
-        capture_output=True,
-        text=True,
-    )
-    assert result.returncode == 0, result.stderr
+    checksums = {}
+    for line in (PRODUCTION_UI / "SHA256SUMS").read_text(encoding="utf-8").splitlines():
+        digest, name = line.split()
+        assert name not in checksums
+        checksums[name] = digest
+    expected = {
+        name: sha256(PRODUCTION_UI / name)
+        for name in ("index.html", "app.js", "style.css")
+    }
+    assert checksums == expected
 
 
 def test_production_ui_source_has_reviewed_final_hashes():
@@ -55,6 +61,7 @@ def test_ndx_viewport_harness():
     assert "NDX_VIEWPORT_PASS" in result.stdout
 
 
+@pytest.mark.skipif(os.name == "nt", reason="deployment script requires a POSIX shell")
 def test_deployment_dry_run_is_read_only_and_maps_only_three_files():
     result = subprocess.run(
         ["bash", str(DEPLOY_SCRIPT), "--dry-run"],

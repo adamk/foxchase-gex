@@ -16,6 +16,11 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
+      - name: Preserve hash-pinned source bytes on Windows
+        if: runner.os == 'Windows'
+        run: |
+          git config --local core.autocrlf false
+          git checkout-index --all --force
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
