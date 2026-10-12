@@ -8,7 +8,6 @@ import hashlib
 import importlib.util
 import json
 import os
-import pwd
 import re
 import stat
 import subprocess
@@ -386,18 +385,29 @@ def _check_asset_hashes(asset_root: Path, manifest_path: Path) -> bool:
     return True
 
 
+def _posix_token_owner_name(uid: int) -> str:
+    """Resolve a file owner on POSIX without requiring pwd at import time."""
+    import pwd
+
+    return pwd.getpwuid(uid).pw_name
+
+
 def _read_secure_token(token_path: Path) -> dict:
     try:
         token_stat = token_path.stat()
-        owner = pwd.getpwuid(token_stat.st_uid).pw_name
+        owner = (
+            _posix_token_owner_name(token_stat.st_uid)
+            if os.name == "posix"
+            else None
+        )
         token = json.loads(token_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, KeyError, TypeError) as exc:
+    except (ImportError, OSError, ValueError, KeyError, TypeError) as exc:
         raise DeploymentHealthError("Schwab auth state could not be read") from exc
 
-    if (
-        not isinstance(token, dict)
-        or owner != "foxchase-gex"
-        or stat.S_IMODE(token_stat.st_mode) != 0o600
+    if not isinstance(token, dict):
+        raise DeploymentHealthError("Schwab token ownership or mode is invalid")
+    if os.name == "posix" and (
+        owner != "foxchase-gex" or stat.S_IMODE(token_stat.st_mode) != 0o600
     ):
         raise DeploymentHealthError("Schwab token ownership or mode is invalid")
     return token

@@ -73,6 +73,39 @@ def healthy_gate(**overrides):
     return evaluate_deployment_health(**values)
 
 
+def test_secure_token_reader_does_not_require_posix_ownership_on_windows(
+    monkeypatch, tmp_path
+):
+    token_path = tmp_path / "schwab_tokens.json"
+    token = {"access_token": "test-access"}
+    token_path.write_text(json.dumps(token), encoding="utf-8")
+
+    monkeypatch.setattr(health, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        health,
+        "_posix_token_owner_name",
+        lambda _uid: pytest.fail("Windows token reads must not use POSIX owner lookup"),
+    )
+
+    assert health._read_secure_token(token_path) == token
+
+
+@pytest.mark.skipif(os.name != "posix", reason="POSIX ownership and mode metadata is unavailable")
+def test_secure_token_reader_still_enforces_posix_owner_and_mode(monkeypatch, tmp_path):
+    token_path = tmp_path / "schwab_tokens.json"
+    token_path.write_text(json.dumps({"access_token": "test-access"}), encoding="utf-8")
+    token_path.chmod(0o600)
+
+    monkeypatch.setattr(health, "_posix_token_owner_name", lambda _uid: "different-user")
+    with pytest.raises(DeploymentHealthError, match="ownership or mode"):
+        health._read_secure_token(token_path)
+
+    monkeypatch.setattr(health, "_posix_token_owner_name", lambda _uid: "foxchase-gex")
+    token_path.chmod(0o644)
+    with pytest.raises(DeploymentHealthError, match="ownership or mode"):
+        health._read_secure_token(token_path)
+
+
 def test_weekend_no_0dte_gate_accepts_authenticated_empty_chains():
     assert healthy_gate() == "weekend_no_0dte_confirmed"
 
@@ -268,7 +301,7 @@ def test_expired_access_token_uses_service_refresh_without_resetting_lifecycle(
     )
     token_path.chmod(0o600)
     monkeypatch.setattr(health, "GEX_ROOT", tmp_path)
-    monkeypatch.setattr(health.pwd, "getpwuid", lambda uid: SimpleNamespace(pw_name="foxchase-gex"))
+    monkeypatch.setattr(health, "_posix_token_owner_name", lambda _uid: "foxchase-gex")
     refresh_calls = []
 
     def normal_refresh(path):
@@ -311,7 +344,7 @@ def test_latched_auth_blocks_expired_token_refresh(monkeypatch, tmp_path):
     )
     token_path.chmod(0o600)
     monkeypatch.setattr(health, "GEX_ROOT", tmp_path)
-    monkeypatch.setattr(health.pwd, "getpwuid", lambda uid: SimpleNamespace(pw_name="foxchase-gex"))
+    monkeypatch.setattr(health, "_posix_token_owner_name", lambda _uid: "foxchase-gex")
     monkeypatch.setattr(
         health,
         "_refresh_access_token_as_service",
@@ -428,7 +461,7 @@ def test_auth_gate_reads_operator_lifecycle_and_restores_environment(monkeypatch
     )
     token_path.chmod(0o600)
     monkeypatch.setattr(health, "GEX_ROOT", tmp_path)
-    monkeypatch.setattr(health.pwd, "getpwuid", lambda uid: SimpleNamespace(pw_name="foxchase-gex"))
+    monkeypatch.setattr(health, "_posix_token_owner_name", lambda _uid: "foxchase-gex")
     monkeypatch.setenv("SCHWAB_TOKEN_PATH", "previous-token-path")
 
     auth, saved_token = health._check_auth_state(token_path, now)
