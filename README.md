@@ -18,6 +18,22 @@ The EC2 request contains only:
 
 It does **not** contain your Schwab client ID, client secret, access token, refresh token, account number, order history, positions, quotes, contract symbols, bid/ask data, or personal information. Submitted snapshots are calculated in memory and are not stored. Anonymous active-session presence stores only a one-way digest of a random browser-session ID for 90 seconds.
 
+### Presence counter
+
+The displayed count is active browser-session IDs, not unique people. The
+client creates a random ID and stores it in tab-scoped sessionStorage.
+Reloading the same tab reuses that ID. Independently opened tabs and separate
+browser profiles, including incognito contexts, normally get separate IDs; a
+tab opened with an opener can start with a copy of that tab's sessionStorage,
+so IDs are not guaranteed to
+map one-to-one to tabs or people. The client sends a presence heartbeat
+immediately and every 30 seconds. GEX requests also refresh the same presence
+record. The API stores only the ID's SHA-256 digest and last-seen time; records
+expire after 90 seconds by default (configured values have a 30-second
+minimum). A closed tab can remain in the count until its last record is older
+than the TTL and a later API request cleans it up. No account, IP address,
+fingerprint, or persistent user identity is used.
+
 ## 1. Create a Schwab developer app
 
 You need a regular Schwab brokerage account and a separate account on the [Schwab Developer Portal](https://developer.schwab.com/).

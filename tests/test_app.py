@@ -1,4 +1,5 @@
 import importlib
+from pathlib import Path
 
 
 app_module = importlib.import_module("gex_client.app")
@@ -70,11 +71,33 @@ def test_presence_route_proxies_anonymous_session(monkeypatch):
     assert response.json == {"online": 7, "ttl_seconds": 90}
 
 
-def test_dashboard_starts_with_zero_active_sessions():
+def test_public_dashboard_starts_with_zero_active_browser_sessions():
     client = app_module.app.test_client()
     response = client.get("/")
+    html = response.get_data(as_text=True)
+
     assert response.status_code == 200
-    assert '<span id="active-sessions">0</span>' in response.get_data(as_text=True)
+    assert "Active browser sessions:" in html
+    assert '<span id="active-sessions">0</span>' in html
+    assert "Connect your Schwab developer app" in html
+    assert "this local Foxchase GEX installation" in html
+    assert "Your credentials stay on this computer." in html
+    assert (
+        '<section class="operator-auth-strip" id="operator-auth-strip" '
+        'aria-live="polite" hidden>'
+    ) in html
+
+
+def test_presence_heartbeat_and_expiry_contract_is_documented():
+    readme = (Path(__file__).parents[1] / "README.md").read_text()
+
+    assert "active browser-session IDs, not unique people" in readme
+    assert "sessionStorage" in readme
+    assert "incognito contexts" in readme
+    assert "every 30 seconds" in readme
+    assert "90 seconds by default" in readme
+    assert "a later API request cleans it up" in readme
+    assert "No account, IP address" in readme
 
 
 def test_setup_status_never_returns_credentials(monkeypatch, tmp_path):
