@@ -339,6 +339,10 @@ def _check_output_layout(output: Path, create: bool = False) -> None:
 
 
 def _fsync_directory(path: Path) -> None:
+    if os.name == "nt":
+        # The Windows CRT does not open directory handles through os.open().
+        # Publication files are fsynced before their atomic replacements.
+        return
     flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
     fd = os.open(path, flags)
     try:

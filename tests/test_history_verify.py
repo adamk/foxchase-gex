@@ -348,14 +348,21 @@ def test_verifier_stops_at_configured_resource_limits(tmp_path):
     assert json.loads(files_limited.stdout)["status"] == "unavailable"
 
 
-def test_verifier_reports_inaccessible_symbol_directory_as_unavailable(tmp_path):
+def test_verifier_reports_inaccessible_symbol_directory_as_unavailable(tmp_path, monkeypatch):
+    from gex_client import history_verify
+
     write_session(tmp_path)
     symbol_dir = tmp_path / "SPX"
-    symbol_dir.chmod(0)
-    try:
-        result = run_verify(tmp_path)
-    finally:
-        symbol_dir.chmod(0o700)
+    real_scandir = history_verify.os.scandir
 
-    assert result.returncode == 2
-    assert json.loads(result.stdout)["status"] == "unavailable"
+    def fail_for_symbol_directory(path):
+        if Path(path) == symbol_dir:
+            raise PermissionError("synthetic inaccessible directory")
+        return real_scandir(path)
+
+    monkeypatch.setattr(history_verify.os, "scandir", fail_for_symbol_directory)
+
+    report = history_verify.verify_archive(tmp_path)
+
+    assert report["status"] == "unavailable"
+    assert any(issue["code"] == "unreadable_symbol_directory" for issue in report["issues"])

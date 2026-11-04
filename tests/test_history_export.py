@@ -10,6 +10,23 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 
 
+def test_directory_fsync_is_skipped_when_windows_cannot_open_directories(tmp_path, monkeypatch):
+    from gex_client import history_export
+
+    opened = []
+
+    def windows_directory_open(path, flags):
+        opened.append(path)
+        raise PermissionError("Windows CRT cannot open directory handles this way")
+
+    monkeypatch.setattr(history_export.os, "name", "nt")
+    monkeypatch.setattr(history_export.os, "open", windows_directory_open)
+
+    history_export._fsync_directory(tmp_path)
+
+    assert opened == []
+
+
 def canonical_hash(value):
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()
