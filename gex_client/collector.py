@@ -20,7 +20,11 @@ from gex_client.auth_health import (
 )
 from gex_client.forward_audit import archive_forward_audit
 from gex_client.health import record_attempt
-from gex_client.schwab import fetch_sanitized_snapshot, validate_authenticated_connection
+from gex_client.schwab import (
+    fetch_sanitized_snapshot,
+    get_access_token,
+    validate_authenticated_connection,
+)
 
 
 NY = ZoneInfo("America/New_York")

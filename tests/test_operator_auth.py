@@ -106,7 +106,7 @@ def test_hosted_dashboard_loads_installed_template_and_pending_form_only_for_ope
 def test_status_payload_is_allowlisted_and_authenticated(monkeypatch, tmp_path):
     configure_operator(monkeypatch, tmp_path)
     monkeypatch.setenv("SCHWAB_CLIENT_SECRET", "client-secret")
-    start = 1791460800.0
+    start = auth_lifecycle.time.time()
     auth_lifecycle.record_full_oauth_authorization(start)
     auth_health._write({
         "health": "healthy",

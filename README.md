@@ -153,8 +153,8 @@ timestamped rollback backup, and never writes root-level `/SHA256SUMS`.
 
 ## Local historical archive
 
-Set `FOXCHASE_GEX_DATA_DIR` to the directory where computed snapshots should be
-stored. The dashboard automatically shows the historical-session controls once
+Set `FOXCHASE_GEX_DATA_DIR` to the directory where historical snapshots should
+be stored. The dashboard automatically shows the historical-session controls once
 that directory contains archived sessions. `FOXCHASE_GEX_REQUIRED_MOUNT` can be
 set to a mounted drive root; the collector then refuses to write when that drive
 is unavailable, preventing data from falling back to the system disk.
@@ -169,8 +169,21 @@ python -m gex_client.collector
 
 The default interval is 60 seconds for SPX and NDX from 09:30 through 16:00 ET
 on weekdays. Set `FOXCHASE_GEX_CAPTURE_SECONDS` to a value of 30 or greater to
-change it. The archive contains computed GEX results only, not Schwab credentials,
-OAuth tokens, account data, or raw option chains.
+change it. Each schema-v2 JSONL archive record contains the computed GEX result
+and the sanitized causal option-chain input snapshot sent to the private
+calculation API, along with request/response timestamps, provenance, and content
+hashes. The causal input is minimized; it is still market-data-derived and may
+remain subject to Schwab and exchange data terms. The archive does not contain
+OAuth tokens, client secrets, account numbers, orders, or positions.
+
+The existing local Historical Session dropdown reads these JSONL sessions
+directly. Read about the archive contract, read-only verification, local
+publishing, and recovery in:
+
+- [`docs/HISTORY_ARCHITECTURE.md`](docs/HISTORY_ARCHITECTURE.md)
+- [`docs/ARCHIVE_SCHEMA.md`](docs/ARCHIVE_SCHEMA.md)
+- [`docs/HISTORICAL_PUBLISHING.md`](docs/HISTORICAL_PUBLISHING.md)
+- [`docs/ARCHIVE_RECOVERY.md`](docs/ARCHIVE_RECOVERY.md)
 
 ### Shadow strategy audit
 
