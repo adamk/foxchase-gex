@@ -27,6 +27,32 @@ def test_directory_fsync_is_skipped_when_windows_cannot_open_directories(tmp_pat
     assert opened == []
 
 
+def test_atomic_activation_works_without_os_fchmod(tmp_path, monkeypatch):
+    from gex_client import history_export
+
+    descriptors = []
+    real_mkstemp = history_export.tempfile.mkstemp
+
+    def track_mkstemp(*args, **kwargs):
+        descriptor, name = real_mkstemp(*args, **kwargs)
+        descriptors.append(descriptor)
+        return descriptor, name
+
+    monkeypatch.setattr(history_export.tempfile, "mkstemp", track_mkstemp)
+    monkeypatch.delattr(history_export.os, "fchmod", raising=False)
+
+    try:
+        history_export._atomic_activate(tmp_path, b'{"generation_id":"synthetic"}\n')
+    finally:
+        for descriptor in descriptors:
+            try:
+                history_export.os.close(descriptor)
+            except OSError:
+                pass
+
+    assert (tmp_path / "current.json").read_bytes() == b'{"generation_id":"synthetic"}\n'
+
+
 def canonical_hash(value):
     return hashlib.sha256(
         json.dumps(value, sort_keys=True, separators=(",", ":"), allow_nan=False).encode()

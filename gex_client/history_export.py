@@ -440,7 +440,8 @@ def _generation_matches(path: Path, expected_files: dict[str, tuple[int, str]]) 
 def _atomic_activate(output: Path, pointer_payload: bytes) -> None:
     fd, temporary_name = tempfile.mkstemp(prefix=".current-", dir=output)
     try:
-        os.fchmod(fd, 0o600)
+        if hasattr(os, "fchmod"):
+            os.fchmod(fd, 0o600)
         with os.fdopen(fd, "wb") as stream:
             stream.write(pointer_payload)
             stream.flush()
