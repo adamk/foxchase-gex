@@ -1,0 +1,10 @@
+{
+  "calendar_class": "synthetic_demo_only",
+  "holidays": [],
+  "trading_sessions": [
+    "2026-10-01",
+    "2026-10-02",
+    "2026-10-05"
+  ],
+  "early_closes": {}
+}
