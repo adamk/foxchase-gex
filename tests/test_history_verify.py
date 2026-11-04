@@ -2,10 +2,13 @@
 
 import hashlib
 import json
+import os
 import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+
+import gex_client.history_verify as history_verify
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -105,6 +108,46 @@ def test_verifier_reports_valid_synthetic_sessions_and_health(tmp_path):
     )
     assert text_result.returncode == 0
     assert "Archive status: valid" in text_result.stdout
+
+
+def test_verifier_reads_crlf_jsonl_in_binary_mode(tmp_path, monkeypatch):
+    records = [
+        frame(stamp="2026-10-01T09:30:00-04:00", index=0),
+        frame(stamp="2026-10-01T09:31:00-04:00", index=1),
+    ]
+    raw = b"\r\n".join(
+        json.dumps(record, separators=(",", ":")).encode("utf-8")
+        for record in records
+    ) + b"\r\n"
+    path = tmp_path / "SPX" / "2026-10-01.jsonl"
+    path.parent.mkdir(parents=True)
+    path.write_bytes(raw)
+
+    # Windows defaults os.open() to text mode unless O_BINARY is supplied.
+    # Simulate that flag on POSIX so this regression test also checks the
+    # required open mode on every CI platform.
+    binary_flag = getattr(os, "O_BINARY", None)
+    simulated_binary_flag = binary_flag is None
+    if simulated_binary_flag:
+        binary_flag = 1 << 30
+        monkeypatch.setattr(history_verify.os, "O_BINARY", binary_flag, raising=False)
+
+    real_open = history_verify.os.open
+
+    def require_binary_for_jsonl(file_path, flags, *args, **kwargs):
+        if os.fsdecode(file_path).endswith(".jsonl"):
+            assert flags & binary_flag, "JSONL archive must be opened with O_BINARY"
+        if simulated_binary_flag:
+            flags &= ~binary_flag
+        return real_open(file_path, flags, *args, **kwargs)
+
+    monkeypatch.setattr(history_verify.os, "open", require_binary_for_jsonl)
+
+    report = history_verify.verify_archive(tmp_path, symbol="SPX")
+
+    assert report["status"] == "valid"
+    assert report["valid_captures"] == 2
+    assert report["bytes_scanned"] == len(raw)
 
 
 def test_verifier_detects_hash_tampering(tmp_path):

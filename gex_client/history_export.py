@@ -65,7 +65,10 @@ def _read_rights_policy(path: Optional[os.PathLike | str]) -> Optional[dict]:
     policy_path = _absolute(path)
     _reject_symlink_components(policy_path)
     try:
-        fd = os.open(policy_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        fd = os.open(
+            policy_path,
+            os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0),
+        )
         try:
             metadata = os.fstat(fd)
             if not stat.S_ISREG(metadata.st_mode):
@@ -366,7 +369,10 @@ def _hash_file(path: Path, byte_limit: int) -> Optional[tuple[int, str]]:
     digest = hashlib.sha256()
     total = 0
     try:
-        fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        fd = os.open(
+            path,
+            os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0),
+        )
     except OSError:
         return None
     try:

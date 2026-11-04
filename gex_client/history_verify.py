@@ -91,7 +91,10 @@ def _load_calendar(path: Optional[os.PathLike | str]) -> dict:
     calendar_path = _absolute(path)
     _reject_symlink_components(calendar_path)
     try:
-        fd = os.open(calendar_path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        fd = os.open(
+            calendar_path,
+            os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0),
+        )
     except OSError as exc:
         raise ArchiveError("calendar file is unavailable") from exc
     try:
@@ -422,7 +425,10 @@ def verify_archive(
                 "last_index": None, "last_timestamp": None,
             }
             try:
-                fd = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+                fd = os.open(
+                    path,
+                    os.O_RDONLY | getattr(os, "O_BINARY", 0) | getattr(os, "O_NOFOLLOW", 0),
+                )
             except OSError:
                 issue("unreadable_session", "session file cannot be opened safely", symbol=display_symbol, session=day)
                 invalid_sessions.append(day)
