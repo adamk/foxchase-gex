@@ -25,7 +25,7 @@ def configure(monkeypatch, tmp_path):
     ("age_days", "expected"),
     [
         (0, "healthy"),
-        (5.9, "healthy"),
+        (5.9, "due_soon"),
         (6, "due_soon"),
         (7, "reauth_required"),
     ],

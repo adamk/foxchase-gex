@@ -445,7 +445,7 @@ def test_local_reauthorization_keeps_callback_form_reachable_for_connected_user(
     monkeypatch.setattr(app_module, "token_path", lambda: token_path)
     client = app_module.app.test_client()
 
-    assert client.get("/setup").status_code == 303
+    assert client.get("/setup").status_code == 200
     authorize = client.get("/operator/reauthorize-schwab")
     state = parse_qs(urlparse(authorize.headers["Location"]).query)["state"][0]
     setup = client.get("/setup")

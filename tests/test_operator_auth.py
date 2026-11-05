@@ -15,7 +15,7 @@ app_module = importlib.import_module("gex_client.app")
 
 def configure_operator(monkeypatch, tmp_path):
     monkeypatch.setenv("GEX_OPERATOR_USERNAME", "operator-test")
-    monkeypatch.setenv("GEX_OPERATOR_PASSWORD_HASH", generate_password_hash("operator-password"))
+    monkeypatch.setenv("GEX_OPERATOR_PASSWORD_HASH", generate_password_hash("operator-password", method="pbkdf2:sha256:1000000"))
     monkeypatch.setenv("GEX_SESSION_SECRET", "s" * 48)
     monkeypatch.setenv("SCHWAB_AUTH_LIFECYCLE_PATH", str(tmp_path / "lifecycle.json"))
     monkeypatch.setenv("SCHWAB_AUTH_HEALTH_PATH", str(tmp_path / "health.json"))
@@ -107,6 +107,7 @@ def test_status_payload_is_allowlisted_and_authenticated(monkeypatch, tmp_path):
     configure_operator(monkeypatch, tmp_path)
     monkeypatch.setenv("SCHWAB_CLIENT_SECRET", "client-secret")
     start = auth_lifecycle.time.time()
+    monkeypatch.setattr(auth_lifecycle.time, "time", lambda: start + 60)
     auth_lifecycle.record_full_oauth_authorization(start)
     auth_health._write({
         "health": "healthy",

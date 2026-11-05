@@ -139,26 +139,40 @@ def exchange_authorization_response(value: str, expected_state: str | None = Non
     if not value:
         raise SchwabError("authorization response is empty")
     state_values = []
-    if "://" in value:
+    client_id, client_secret, redirect_uri = _credentials()
+    if expected_state is not None:
+        # Bind the full callback to the configured redirect, never an arbitrary host.
+        try:
+            parsed = urlparse(value)
+            expected = urlparse(redirect_uri)
+            query = parse_qs(parsed.query, keep_blank_values=True, max_num_fields=16)
+            codes = query.get("code", [])
+            state_values = query.get("state", [])
+            if (
+                len(value) > 8192 or parsed.username or parsed.password or parsed.fragment
+                or (parsed.scheme, parsed.hostname, parsed.port or (443 if parsed.scheme == "https" else 80), parsed.path or "/")
+                != (expected.scheme, expected.hostname, expected.port or (443 if expected.scheme == "https" else 80), expected.path or "/")
+                or len(codes) != 1 or not codes[0] or len(codes[0]) > 4096
+                or "error" in query
+            ):
+                raise ValueError("invalid callback")
+            code = codes[0]
+        except (ValueError, UnicodeError):
+            raise SchwabError("invalid authorization callback", failure_class="state_mismatch") from None
+    elif "://" in value:
         query = parse_qs(urlparse(value).query)
         code = query.get("code", [""])[0]
-        state_values = query.get("state", [])
     else:
         code = value
     if not code:
         raise SchwabError("the pasted value did not contain an authorization code")
     if expected_state is not None and (
-        not isinstance(expected_state, str)
-        or len(expected_state) < 32
+        not isinstance(expected_state, str) or len(expected_state) < 32
         or len(state_values) != 1
         or not hmac.compare_digest(state_values[0], expected_state)
     ):
-        raise SchwabError(
-            "the pasted authorization response did not match the expected OAuth state",
-            failure_class="state_mismatch",
-        )
+        raise SchwabError("authorization state mismatch", failure_class="state_mismatch")
 
-    client_id, client_secret, redirect_uri = _credentials()
     response = requests.post(
         TOKEN_URL,
         headers={

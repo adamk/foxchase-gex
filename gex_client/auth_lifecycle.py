@@ -151,7 +151,7 @@ def operator_status(now: float | None = None) -> dict:
     remaining = max(0, int(due_epoch - epoch))
     if latched_failure or age >= 7 * 86400 or due_epoch <= epoch:
         state = "reauth_required"
-    elif age >= 6 * 86400:
+    elif remaining <= 72 * 3600:
         state = "due_soon"
     else:
         state = "healthy"
