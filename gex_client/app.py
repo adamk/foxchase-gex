@@ -347,9 +347,7 @@ def dashboard():
 def local_setup_page():
     if not _local_setup_request():
         abort(404)
-    setup_status = _setup_status_payload()
-    if setup_status["ready"] and not setup_status["authorization_pending"]:
-        return redirect("/", code=303)
+    # Saved credentials remain available for proactive weekly reauthorization.
     return _render_setup()
 
 

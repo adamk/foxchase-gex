@@ -221,3 +221,20 @@ pytest
 ## Important
 
 This project is research software, not investment advice. It does not place trades. You are responsible for complying with the terms and market-data rights attached to your brokerage/developer account. Do not commit `.env` or token files; both are ignored by Git.
+
+
+### Weekly Schwab reauthorization (Windows, macOS and Linux)
+
+Schwab interactive authorization lasts seven days. Automatic access-token refreshes
+never extend that deadline. The local dashboard shows the exact UTC deadline and
+a live countdown, with warnings starting at 72 hours, increasing at 24 hours and
+requiring reauthorization at expiration. You may reauthorize earlier.
+
+Select **Reauthorize Schwab** to open the existing local `/setup` page. Saved
+Client ID and Client Secret stay private on your computer and are reused; do not
+enter them again unless missing or rejected by Schwab. Open Schwab in the new tab,
+approve access, then copy the complete redirected URL into the setup completion
+form. A connection error at the callback address is expected. Keep that URL private.
+Success requires both token exchange and an authenticated Schwab request. If the
+exchange result is ambiguous, do not resubmit it automatically. These instructions
+apply only to this local installation, not another machine's collector.

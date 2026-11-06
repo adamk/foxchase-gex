@@ -112,8 +112,8 @@ async function main() {{
   global.fetch = async () => ({{ok: true, status: 200, json: async () => ({{state: "healthy", remaining_seconds: 464400, reauthorization_pending: false}})}});
   await ui.loadOperatorAuthStatus();
   assert.equal(elements.get("operator-auth-strip").hidden, false);
-  assert.equal(elements.get("operator-auth-label").textContent, "Schwab auth · 5d 9h remaining");
-  assert.equal(elements.get("operator-reauthorize-link").hidden, !hosted);
+  assert.equal(elements.get("operator-auth-label").textContent, (hosted ? "Schwab auth · 5d 9h remaining" : "Schwab Authorization · Status unknown · Deadline unavailable · Time remaining unavailable"));
+  assert.equal(elements.get("operator-reauthorize-link").hidden, false);
   assert.equal(elements.get("operator-reauth-completion").hidden, true);
   if (hosted) {{
     assert.equal(elements.get("operator-reauthorize-link").href, "/operator/reauthorize-schwab");
@@ -122,7 +122,7 @@ async function main() {{
 
   global.fetch = async () => ({{ok: true, status: 200, json: async () => ({{state: "due_soon", remaining_seconds: 3600, reauthorization_pending: true}})}});
   await ui.loadOperatorAuthStatus();
-  assert.equal(elements.get("operator-auth-label").textContent, "Schwab auth · Reauthorize soon");
+  assert.equal(elements.get("operator-auth-label").textContent, (hosted ? "Schwab auth · Reauthorize soon" : "Schwab Authorization · Authorization pending · Deadline unavailable · Time remaining unavailable"));
   assert.equal(elements.get("operator-reauthorize-link").hidden, false);
   assert.equal(elements.get("operator-reauth-completion").hidden, !hosted);
   assert.equal(elements.get("operator-reauthorize-link").href, "/operator/reauthorize-schwab");
@@ -132,7 +132,7 @@ async function main() {{
 
   global.fetch = async () => ({{ok: true, status: 200, json: async () => ({{state: "reauth_required", reauth_required: true, reauthorization_pending: true}})}});
   await ui.loadOperatorAuthStatus();
-  assert.equal(elements.get("operator-auth-label").textContent, "Schwab auth · Reauthorization required");
+  assert.equal(elements.get("operator-auth-label").textContent, (hosted ? "Schwab auth · Reauthorization required" : "Schwab Authorization · Reauthorization required · Deadline unavailable · Time remaining unavailable"));
   assert.equal(elements.get("operator-reauthorize-link").hidden, false);
   assert.equal(elements.get("operator-reauth-completion").hidden, !hosted);
   assert.equal(elements.get("operator-reauthorize-link").href, "/operator/reauthorize-schwab");
@@ -309,9 +309,9 @@ global.fetch = async url => {{
 }};
 async function main() {{
   for (const [state, label, linkVisible] of [
-    ["healthy", "Schwab auth · 5d 9h remaining", false],
-    ["due_soon", "Schwab auth · Reauthorize soon", true],
-    ["reauth_required", "Schwab auth · Reauthorization required", true]
+    ["healthy", "Schwab Authorization · Status unknown · Deadline unavailable · Time remaining unavailable", true],
+    ["due_soon", "Schwab Authorization · Status unknown · Deadline unavailable · Time remaining unavailable", true],
+    ["reauth_required", "Schwab Authorization · Reauthorization required · Deadline unavailable · Time remaining unavailable", true]
   ]) {{
     lifecycleState = state;
     assert.equal(await ui.checkSetup(), true);
@@ -320,7 +320,7 @@ async function main() {{
     assert.equal(elements.get("operator-auth-strip").hidden, false);
     assert.equal(elements.get("operator-auth-label").textContent, label);
     assert.equal(elements.get("operator-reauthorize-link").hidden, !linkVisible);
-    if (linkVisible) assert.equal(elements.get("operator-reauthorize-link").href, "/operator/reauthorize-schwab");
+    if (linkVisible) assert.equal(elements.get("operator-reauthorize-link").href, "/setup");
   }}
 }}
 main().catch(error => {{ console.error(error); process.exitCode = 1; }});
