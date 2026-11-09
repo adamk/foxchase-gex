@@ -308,6 +308,7 @@ function updateGlobalStatus() {
 }
 
 async function loadGex(state) {
+  if (typeof window !== "undefined" && window.GEXLiveReplay?.ownsChart(state.symbol)) return;
   if (state.loadInFlight) return;
   state.loadInFlight = true;
   $(`chart-status-${state.symbol}`).textContent =
@@ -319,14 +320,24 @@ async function loadGex(state) {
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "GEX request failed");
-    renderResult(data, state, false);
+    if (!(typeof window !== "undefined" && window.GEXLiveReplay?.ownsChart(state.symbol)))
+      renderResult(data, state, false);
   } catch (error) {
+    if (typeof window !== "undefined" && window.GEXLiveReplay?.ownsChart(state.symbol)) return;
     clearClassification(state.symbol);
     showChartError(state, error.message);
     $(`chart-status-${state.symbol}`).textContent = "not connected";
   } finally {
     state.loadInFlight = false;
   }
+}
+
+async function refreshLiveState(state) {
+  if (typeof window !== "undefined" && window.GEXLiveReplay) {
+    await window.GEXLiveReplay.refreshSymbol(state.symbol);
+    if (window.GEXLiveReplay.ownsChart(state.symbol)) return;
+  }
+  await loadGex(state);
 }
 
 async function loadHistorySessions(state) {
@@ -358,7 +369,7 @@ async function loadHistoryTimeline(state) {
     state.historyTimeline = [];
     state.historical = false;
     $(`history-time-field-${state.symbol}`).hidden = true;
-    await loadGex(state);
+    await refreshLiveState(state);
     updateGlobalStatus();
     return;
   }
@@ -414,7 +425,7 @@ async function refreshAll() {
       const state = chartStates[symbol];
       return $(`history-session-${symbol}`).value
         ? loadHistoricalSnapshot(state)
-        : loadGex(state);
+        : refreshLiveState(state);
     }));
   } finally {
     button.disabled = false;
@@ -565,6 +576,8 @@ const chartStates = Object.fromEntries(CHART_SYMBOLS.map(symbol => [symbol, {
   autoEdge: null
 }]));
 
+if (typeof window !== "undefined") window.GEXReplayHost = { chartStates, renderResult };
+
 function boot() {
   loadOperatorAuthStatus();
   startOperatorAuthStatusRefresh();
@@ -586,7 +599,10 @@ function boot() {
       if (state.data) renderChart(state.data, state);
     });
 
-    $(`history-session-${symbol}`).addEventListener("change", () => loadHistoryTimeline(state));
+    $(`history-session-${symbol}`).addEventListener("change", () => {
+      window.GEXLiveReplay?.syncSymbol(symbol);
+      loadHistoryTimeline(state);
+    });
     $(`history-time-${symbol}`).addEventListener("input", () => {
       const index = Number($(`history-time-${symbol}`).value || 0);
       const point = state.historyTimeline[index];
@@ -601,7 +617,7 @@ function boot() {
     const ready = await checkSetup();
     if (!ready) return;
     if (isMarketRefreshWindow()) {
-      await Promise.all(CHART_SYMBOLS.map(symbol => loadGex(chartStates[symbol])));
+      await Promise.all(CHART_SYMBOLS.map(symbol => refreshLiveState(chartStates[symbol])));
       updateGlobalStatus();
     } else {
       setGlobalStatus("connected · auto-refresh paused outside market hours");
@@ -613,7 +629,7 @@ function boot() {
     const liveStates = CHART_SYMBOLS
       .map(symbol => chartStates[symbol])
       .filter(state => !$(`history-session-${state.symbol}`).value);
-    Promise.all(liveStates.map(loadGex)).then(updateGlobalStatus);
+    Promise.all(liveStates.map(refreshLiveState)).then(updateGlobalStatus);
   }, 30_000);
 }
 

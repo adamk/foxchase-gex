@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Foxchase GEX</title>
-  <link rel="stylesheet" href="/static/css/style.css?v=gui-schwab-auth-ux-20261010">
+  <link rel="stylesheet" href="/static/css/style.css?v=r12-live-replay-20261109">
   <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
 </head>
 <body data-local-operator-access="{{ 'true' if local_operator_access else 'false' }}">
@@ -186,6 +186,13 @@
           <div class="chart-error" id="chart-error-NDX" hidden></div>
           <div class="unit" id="unit-NDX">shares per $ move</div>
         </div>
+        <section class="live-replay-controls" id="live-replay-NDX" aria-label="NDX live session replay">
+          <label for="live-replay-time-NDX">Session time (Eastern)</label>
+          <input id="live-replay-time-NDX" type="range" min="0" max="0" step="1" value="0" disabled aria-label="NDX recorded GEX snapshot time">
+          <output id="live-replay-label-NDX" for="live-replay-time-NDX">No current-session snapshots</output>
+          <button id="live-replay-live-NDX" type="button" disabled>Live</button>
+          <span id="live-replay-status-NDX" role="status" aria-live="polite">Waiting for recorded snapshots…</span>
+        </section>
       </article>
 
       <article class="chart-card" data-symbol="SPX">
@@ -235,10 +242,18 @@
           <div class="chart-error" id="chart-error-SPX" hidden></div>
           <div class="unit" id="unit-SPX">shares per $ move</div>
         </div>
+        <section class="live-replay-controls" id="live-replay-SPX" aria-label="SPX live session replay">
+          <label for="live-replay-time-SPX">Session time (Eastern)</label>
+          <input id="live-replay-time-SPX" type="range" min="0" max="0" step="1" value="0" disabled aria-label="SPX recorded GEX snapshot time">
+          <output id="live-replay-label-SPX" for="live-replay-time-SPX">No current-session snapshots</output>
+          <button id="live-replay-live-SPX" type="button" disabled>Live</button>
+          <span id="live-replay-status-SPX" role="status" aria-live="polite">Waiting for recorded snapshots…</span>
+        </section>
       </article>
     </section>
   </main>
 
-  <script src="/static/js/app.js?v=gui-schwab-auth-ux-20261010"></script>
+  <script src="/static/js/app.js?v=r12-live-replay-20261109"></script>
+  <script src="/static/js/live-replay.js?v=r12-live-replay-20261109"></script>
 </body>
 </html>

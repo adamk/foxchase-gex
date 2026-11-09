@@ -185,6 +185,24 @@ publishing, and recovery in:
 - [`docs/HISTORICAL_PUBLISHING.md`](docs/HISTORICAL_PUBLISHING.md)
 - [`docs/ARCHIVE_RECOVERY.md`](docs/ARCHIVE_RECOVERY.md)
 
+### Live Replay
+
+The SPX and NDX charts also offer a Live Replay slider for the **current Eastern
+session**. The headless collector above is the ingestion source: each completed
+schema-v2 archive record becomes one selectable timestamp. Choose an earlier
+point to see that recorded GEX result; choose **Live** to return to the newest
+recorded capture. Gaps are not filled, and a delayed newest capture is marked
+stale. The separate Historical Session dropdown remains available for older
+days.
+
+Live Replay uses the same `FOXCHASE_GEX_DATA_DIR` archive and the existing local
+dashboard access controls. Its read-only timeline and snapshot endpoints are
+`/api/live-replay/SPX/{timeline,snapshot}` and the equivalent NDX paths. The
+snapshot response contains computed GEX output and capture provenance, not the
+archived causal option-chain input. No market-data files are distributed with
+this repository. Keep your archive and OAuth state outside Git; review the
+applicable market-data terms before sharing recorded snapshots.
+
 ### Shadow strategy audit
 
 Each successful collector snapshot also appends a shadow-only structural audit

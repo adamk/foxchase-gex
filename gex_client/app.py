@@ -18,6 +18,7 @@ from werkzeug.security import check_password_hash
 from gex_client import auth_health, auth_lifecycle
 from gex_client import local_setup, schwab
 from gex_client.archive import list_sessions, snapshot, timeline
+from gex_client import live_replay
 from gex_client.schwab import (
     SchwabError,
     fetch_sanitized_snapshot,
@@ -650,3 +651,35 @@ def history_snapshot(symbol: str, day: str):
         return jsonify(result)
     except (TypeError, ValueError) as exc:
         return jsonify({"error": str(exc)}), 400
+
+
+@app.get("/api/live-replay/<symbol>/timeline")
+def live_replay_timeline(symbol: str):
+    gate = _operator_gate()
+    if gate is not None:
+        return gate
+    if set(request.args) - {"after"}:
+        return jsonify({"error": "invalid replay cursor"}), 400
+    try:
+        return jsonify(live_replay.timeline(symbol, request.args.get("after")))
+    except live_replay.ReplayUnavailable:
+        return jsonify({"error": "replay archive unavailable"}), 503
+    except ValueError:
+        return jsonify({"error": "invalid replay request"}), 400
+
+
+@app.get("/api/live-replay/<symbol>/snapshot")
+def live_replay_snapshot(symbol: str):
+    gate = _operator_gate()
+    if gate is not None:
+        return gate
+    if set(request.args) != {"captured_at"}:
+        return jsonify({"error": "invalid replay timestamp"}), 400
+    try:
+        return jsonify(live_replay.snapshot(symbol, request.args["captured_at"]))
+    except live_replay.ReplayUnavailable:
+        return jsonify({"error": "replay archive unavailable"}), 503
+    except LookupError:
+        return jsonify({"error": "replay snapshot unavailable"}), 404
+    except ValueError:
+        return jsonify({"error": "invalid replay request"}), 400
