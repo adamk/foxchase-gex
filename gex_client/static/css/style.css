@@ -289,6 +289,26 @@ button:disabled { cursor: wait; opacity: .55; }
   white-space: nowrap;
 }
 .chart-body { position: relative; min-height: 0; flex: 1 1 auto; }
+
+.live-replay-controls {
+  display: grid;
+  grid-template-columns: auto minmax(100px, 1fr) auto auto;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 8px 12px;
+  border-top: 1px solid #383838;
+  font-size: 12px;
+}
+.live-replay-controls input[type="range"] { width: 100%; min-width: 100px; }
+.live-replay-controls output { min-width: 120px; font-variant-numeric: tabular-nums; }
+.live-replay-controls span { grid-column: 1 / -1; }
+@media (max-width: 680px) {
+  .live-replay-controls { grid-template-columns: minmax(0, 1fr) auto; }
+  .live-replay-controls label, .live-replay-controls input, .live-replay-controls output {
+    grid-column: 1;
+  }
+  .live-replay-controls button { grid-column: 2; grid-row: 2; }
+}
 [id^="gexChart-"] { width: 100%; height: 100%; }
 .unit {
   position: absolute;
