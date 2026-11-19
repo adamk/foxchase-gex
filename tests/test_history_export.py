@@ -185,6 +185,57 @@ def test_export_dry_run_does_not_create_output(tmp_path):
     assert not output.exists()
 
 
+def test_explicit_partial_session_is_labeled_with_observed_coverage_only(tmp_path):
+    archive = tmp_path / "archive"
+    output = tmp_path / "publication"
+    write_archive(archive)
+
+    result = run_export(archive, output, "--partial-session", "SPX:2026-10-01")
+
+    assert result.returncode == 0, result.stderr
+    pointer = json.loads((output / "current.json").read_text())
+    index_path = output / pointer["index_path"]
+    session = json.loads(index_path.read_text())["sessions"][0]
+    assert session["publication_status"] == "PARTIAL"
+    assert session["coverage"] == {
+        "capture_count": 2,
+        "first_captured_at": "2026-10-01T09:30:00-04:00",
+        "last_captured_at": "2026-10-01T09:31:00-04:00",
+        "gap_count": 0,
+        "closing_measurement": False,
+    }
+    timeline = index_path.parent / session["timeline_path"]
+    assert len(timeline.read_bytes().splitlines()) == 2
+    assert "coverage_percent" not in session
+
+
+def test_partial_status_is_opt_in_and_does_not_change_default_generation(tmp_path):
+    archive = tmp_path / "archive"
+    output = tmp_path / "publication"
+    write_archive(archive)
+
+    result = run_export(archive, output)
+
+    assert result.returncode == 0, result.stderr
+    pointer = json.loads((output / "current.json").read_text())
+    index_path = output / pointer["index_path"]
+    session = json.loads(index_path.read_text())["sessions"][0]
+    assert "publication_status" not in session
+
+
+def test_partial_label_does_not_bypass_non_synthetic_rights_gate(tmp_path):
+    archive = tmp_path / "archive"
+    output = tmp_path / "publication"
+    write_archive(archive, synthetic=False)
+
+    result = run_export(archive, output, "--partial-session", "SPX:2026-10-01",
+                        allow_synthetic=False)
+
+    assert result.returncode == 1
+    assert json.loads(result.stdout)["status"] == "blocked"
+    assert not output.exists()
+
+
 def test_synthetic_markers_require_explicit_fixture_opt_in(tmp_path):
     archive = tmp_path / "archive"
     output = tmp_path / "publication"

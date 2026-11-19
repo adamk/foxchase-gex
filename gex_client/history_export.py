@@ -7,11 +7,13 @@ import hashlib
 import json
 import math
 import os
+import re
 import shutil
 import stat
 import sys
 import tempfile
 from pathlib import Path
+from datetime import date
 from typing import Optional
 
 from gex_client.archive import archive_root
@@ -275,7 +277,7 @@ class _TimelineCollector:
     def close(self) -> None:
         self._close_current()
 
-    def session_metadata(self, report: dict) -> list[dict]:
+    def session_metadata(self, report: dict, partial_sessions: set[tuple[str, str]] = frozenset()) -> list[dict]:
         output = []
         for key in sorted(self.sessions):
             value = self.sessions[key]
@@ -299,6 +301,15 @@ class _TimelineCollector:
             value["integrity_status"] = "verified_with_gaps" if finding_codes else "verified"
             value["gap_count"] = gap_count
             value["finding_codes"] = finding_codes
+            if key in partial_sessions:
+                value["publication_status"] = "PARTIAL"
+                value["coverage"] = {
+                    "capture_count": value["capture_count"],
+                    "first_captured_at": value["first_captured_at"],
+                    "last_captured_at": value["last_captured_at"],
+                    "gap_count": gap_count,
+                    "closing_measurement": False,
+                }
             output.append(value)
         return output
 
@@ -505,6 +516,7 @@ def export_archive(
     required_mount: Optional[os.PathLike | str] = None,
     rights_policy: Optional[os.PathLike | str] = None,
     allow_capture_gaps: bool = False,
+    partial_sessions: Optional[list[str] | tuple[str, ...]] = None,
     allow_synthetic_fixtures: bool = False,
     dry_run: bool = False,
     max_files: int = 10_000,
@@ -518,6 +530,21 @@ def export_archive(
     output = _absolute(output_dir)
     if _paths_overlap(source, output):
         raise ExportConfigurationError("archive and output directories must not overlap")
+    partial_session_keys: set[tuple[str, str]] = set()
+    for item in partial_sessions or ():
+        if not isinstance(item, str) or not re.fullmatch(r"(SPX|NDX):\d{4}-\d{2}-\d{2}", item):
+            raise ExportConfigurationError("partial session must be SYMBOL:YYYY-MM-DD")
+        symbol_name, day = item.split(":", 1)
+        try:
+            if date.fromisoformat(day).isoformat() != day:
+                raise ValueError
+        except ValueError as exc:
+            raise ExportConfigurationError("partial session date is invalid") from exc
+        if symbol is not None and symbol_name != symbol.upper():
+            raise ExportConfigurationError("partial session does not match selected symbol")
+        if (symbol_name, day) in partial_session_keys:
+            raise ExportConfigurationError("duplicate partial session")
+        partial_session_keys.add((symbol_name, day))
     try:
         policy = _read_rights_policy(rights_policy)
         fields = policy["result_fields"] if policy else DEFAULT_RESULT_FIELDS
@@ -561,7 +588,10 @@ def export_archive(
         and policy is None and not allow_synthetic_fixtures
     ):
         raise ExportBlocked("synthetic markers are unauthenticated; explicitly opt in only for known synthetic fixtures")
-    first_sessions = preview.session_metadata(first_report)
+    first_sessions = preview.session_metadata(first_report, partial_session_keys)
+    observed_sessions = {(item["symbol"], item["date"]) for item in first_sessions}
+    if not partial_session_keys <= observed_sessions:
+        raise ExportConfigurationError("requested partial session is not present in the verified archive")
     first_redistribution_status = _redistribution_status(first_report, policy)
     first_generation_id, first_index, first_index_payload = _build_index(
         first_sessions, fields, allow_capture_gaps, first_redistribution_status,
@@ -629,7 +659,7 @@ def export_archive(
             and policy is None and not allow_synthetic_fixtures
         ):
             raise ExportBlocked("synthetic markers are unauthenticated; explicitly opt in only for known synthetic fixtures")
-        second_sessions = collector.session_metadata(second_report)
+        second_sessions = collector.session_metadata(second_report, partial_session_keys)
         second_redistribution_status = _redistribution_status(second_report, policy)
         generation_id, index, index_payload = _build_index(
             second_sessions, fields, allow_capture_gaps, second_redistribution_status,
@@ -709,6 +739,10 @@ def main(argv: Optional[list[str]] = None) -> int:
     )
     parser.add_argument("--allow-capture-gaps", action="store_true", help="allow explicitly reported cadence gaps without filling them")
     parser.add_argument(
+        "--partial-session", action="append", default=[], metavar="SYMBOL:YYYY-MM-DD",
+        help="explicitly label a verified captured session PARTIAL; does not bypass integrity or rights gates",
+    )
+    parser.add_argument(
         "--allow-synthetic-fixtures",
         action="store_true",
         help="explicitly trust unauthenticated synthetic markers for known fabricated fixtures only",
@@ -731,6 +765,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             required_mount=args.required_mount,
             rights_policy=args.rights_policy,
             allow_capture_gaps=args.allow_capture_gaps,
+            partial_sessions=args.partial_session,
             allow_synthetic_fixtures=args.allow_synthetic_fixtures,
             dry_run=args.dry_run,
             max_files=args.max_files,
