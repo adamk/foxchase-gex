@@ -10,11 +10,21 @@ URL = "https://127.0.0.1?code=sample&state=state"
 
 @pytest.fixture
 def attempt(tmp_path, monkeypatch):
+    if m.sys.platform != "linux":
+        pytest.skip("The Schwab OAuth attempt store requires Linux and POSIX file safeguards")
     monkeypatch.setattr(m, "prepare_grant", lambda: ("state", "https://provider.test"))
     monkeypatch.setattr(m.schwab, "_credentials", lambda: ("id", "secret", "https://127.0.0.1"))
     exchange = Mock()
     monkeypatch.setattr(m, "exchange_and_validate", exchange)
     return m.Attempts(tmp_path / "attempt.db"), exchange
+
+
+def test_unsupported_platform_rejected_before_creating_store(tmp_path, monkeypatch):
+    path = tmp_path / "attempt.db"
+    monkeypatch.setattr(m.sys, "platform", "win32")
+    with pytest.raises(NotImplementedError, match="requires Linux"):
+        m.Attempts(path)
+    assert not path.exists()
 
 
 def test_owner_and_single_use(attempt):

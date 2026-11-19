@@ -4,6 +4,7 @@ import hashlib
 import os
 import re
 import sqlite3
+import sys
 import time
 from contextlib import closing, contextmanager
 
@@ -19,6 +20,8 @@ class Attempts:
     """Store state only. The authenticated relay supplies an opaque session binding."""
 
     def __init__(self, path):
+        if sys.platform != "linux":
+            raise NotImplementedError("The Schwab OAuth attempt store requires Linux")
         self.path = path
         fd = os.open(path, os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
         try:
