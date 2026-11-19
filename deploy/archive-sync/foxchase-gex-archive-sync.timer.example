@@ -1,0 +1,13 @@
+[Unit]
+Description=Periodic integrity-checked GEX backup archive synchronization
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=15min
+AccuracySec=1min
+RandomizedDelaySec=2min
+Persistent=yes
+Unit=foxchase-gex-archive-sync.service
+
+[Install]
+WantedBy=timers.target

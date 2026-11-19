@@ -1,0 +1,27 @@
+[Unit]
+Description=Integrity-checked GEX archive mirror from raspberrypi-backup
+Wants=network-online.target
+After=network-online.target
+RequiresMountsFor=/mnt/gex-target
+AssertPathIsMountPoint=/mnt/gex-target
+
+[Service]
+Type=oneshot
+User=gex-sync
+Group=gex-sync
+WorkingDirectory=/opt/gex-sync
+ExecStart=/opt/gex-sync/.venv/bin/python -B -m gex_client.archive_sync --sync --mirror-root /mnt/gex-target/foxchase-gex-backup-mirror/raspberrypi-backup --primary-archive-root /mnt/gex-target/foxchase-gex/archive --primary-legacy-sessions-root /mnt/gex-target/foxchase-daily/sessions --required-mount /mnt/gex-target --expected-mount-uuid 11111111-2222-4333-8444-555555555555 --remote gex-export@192.0.2.20 --identity /etc/gex-sync/ssh/foxchase-gex-archive-sync --known-hosts /etc/gex-sync/ssh/known_hosts --host-key-alias 192.0.2.20
+UMask=0077
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadOnlyPaths=/mnt/gex-target/foxchase-gex/archive /mnt/gex-target/foxchase-daily/sessions /etc/gex-sync/ssh/known_hosts /etc/gex-sync/ssh/foxchase-gex-archive-sync
+ReadWritePaths=/mnt/gex-target/foxchase-gex-backup-mirror
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+IPAddressDeny=any
+IPAddressAllow=192.0.2.20/32
+TimeoutStartSec=4min
+Restart=no
+StandardOutput=journal
+StandardError=journal

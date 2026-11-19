@@ -1,0 +1,9 @@
+#!/bin/sh
+set -eu
+
+# Replace the example mount and filesystem UUID with independently verified values.
+SOURCE_MOUNT="/mnt/gex-source"
+SOURCE_UUID="22222222-3333-4444-8555-666666666666"
+exec /usr/bin/python3 /usr/local/libexec/foxchase-gex-archive-sync.py --export \
+  --archive-root /mnt/gex-source/foxchase-gex/archive \
+  --required-mount "$SOURCE_MOUNT" --expected-mount-uuid "$SOURCE_UUID"
