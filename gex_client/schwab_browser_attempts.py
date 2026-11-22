@@ -1,6 +1,7 @@
 """Durable backup-local attempt state for the Schwab operator bridge."""
 
 import hashlib
+import logging
 import os
 import re
 import sqlite3
@@ -12,6 +13,8 @@ from .schwab_browser_grant import (
     GrantRejected, callback_code, exchange_and_validate, prepare_grant,
 )
 from . import schwab
+
+_LOG = logging.getLogger(__name__)
 
 TTL_SECONDS = 300
 
@@ -74,11 +77,26 @@ class Attempts:
         try:
             exchange_and_validate(code)
         except GrantRejected as exc:
-            if str(exc) == "provider_response_unconfirmed":
+            category = str(exc)
+            safe = {
+                "exchange_rejected",
+                "invalid_token_response",
+                "market_data_validation_failed",
+                "provider_response_unconfirmed",
+            }
+            _LOG.warning(
+                "schwab_oauth outcome=%s",
+                category if category in safe else "other_rejection",
+            )
+            if category == "provider_response_unconfirmed":
                 raise
             with self._write() as db:
                 db.execute("UPDATE attempt SET status='failed' WHERE slot=1")
             raise
+        except Exception:
+            _LOG.warning("schwab_oauth outcome=unexpected_exception")
+            raise
         else:
             with self._write() as db:
                 db.execute("UPDATE attempt SET status='succeeded' WHERE slot=1")
+            _LOG.warning("schwab_oauth outcome=succeeded")
