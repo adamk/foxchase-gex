@@ -88,3 +88,34 @@ def test_concurrent_completions_exchange_once(attempt, monkeypatch):
             release.set()
         first.result()
     mock.assert_called_once_with("sample")
+
+
+@pytest.mark.parametrize("failure,expected,final_state", [
+    (m.GrantRejected("provider_response_unconfirmed"), "provider_response_unconfirmed", "exchanging"),
+    (m.GrantRejected("mock provider returned sensitive data"), "other_rejection", "failed"),
+    (RuntimeError("mock unexpected sensitive data"), "unexpected_exception", "exchanging"),
+])
+def test_safe_outcome_logging(attempt, caplog, failure, expected, final_state):
+    import sqlite3
+
+    store, exchange = attempt
+    caplog.set_level("WARNING")
+    exchange.side_effect = failure
+    store.begin(OWNER)
+    with pytest.raises(type(failure)):
+        store.complete(OWNER, URL)
+
+    assert "schwab_oauth outcome=" + expected in caplog.text
+    assert "mock provider returned sensitive data" not in caplog.text
+    assert "mock unexpected sensitive data" not in caplog.text
+    with sqlite3.connect(store.path) as db:
+        assert db.execute("SELECT status FROM attempt WHERE slot=1").fetchone()[0] == final_state
+
+
+def test_success_logs_only_after_commit(attempt, caplog):
+    store, exchange = attempt
+    caplog.set_level("WARNING")
+    store.begin(OWNER)
+    store.complete(OWNER, URL)
+    exchange.assert_called_once_with("sample")
+    assert "schwab_oauth outcome=succeeded" in caplog.text
